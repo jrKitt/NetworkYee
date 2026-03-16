@@ -286,7 +286,7 @@ def run_sender(host: str, port: int, rate_hz: int, samples: int = 1000) -> None:
 	print(
 		"hapticnet stream summary "
 		f"packets={sent_packets} "
-		"lat(avg/min/max)=n/a "
+		"lat(avg/min/max)=0.00/0.00/0.00 ms "
 		f"duration={duration_s:.2f}s"
 	)
 
