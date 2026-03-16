@@ -208,16 +208,14 @@ class ReceiverStats:
 		self.last_print_at = now
 
 
-def calculate_latency_ms(packet_timestamp_ns: int, now_ns: Optional[int] = None) -> Optional[float]:
+def calculate_latency_ms(packet_timestamp_ns: int, now_ns: Optional[int] = None) -> float:
 	"""Calculate one-way latency from sender timestamp to local receive time."""
 	if now_ns is None:
 		now_ns = time.time_ns()
 	if packet_timestamp_ns <= 0:
-		return None
+		return 0.0
 	latency_ms = (now_ns - packet_timestamp_ns) / 1_000_000.0
-	if latency_ms < 0:
-		return None
-	return latency_ms
+	return max(0.0, latency_ms)
 
 
 def run_simulation(sample_count: int) -> None:
@@ -427,15 +425,12 @@ def run_receiver(
 					stats.rx_packets += 1
 					stream_packets += 1
 					latency_ms = calculate_latency_ms(in_order.timestamp_ns)
-					if latency_ms is not None:
-						stats.add_latency(latency_ms)
-						stream_latency_sum_ms += latency_ms
-						stream_latency_samples += 1
-						stream_latency_min_ms = min(stream_latency_min_ms, latency_ms)
-						stream_latency_max_ms = max(stream_latency_max_ms, latency_ms)
-						latency_text = f"lat={latency_ms:.2f}ms"
-					else:
-						latency_text = "lat=n/a"
+					stats.add_latency(latency_ms)
+					stream_latency_sum_ms += latency_ms
+					stream_latency_samples += 1
+					stream_latency_min_ms = min(stream_latency_min_ms, latency_ms)
+					stream_latency_max_ms = max(stream_latency_max_ms, latency_ms)
+					latency_text = f"lat={latency_ms:.2f}ms"
 					print(
 						f"hapticnet rx seq={in_order.sequence:04d} "
 						f"pos=({in_order.pos_x:+.3f},{in_order.pos_y:+.3f},{in_order.pos_z:+.3f}) {latency_text}"
