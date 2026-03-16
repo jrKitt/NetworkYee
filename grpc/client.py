@@ -104,7 +104,7 @@ if __name__ == "__main__":
             broadcast_ip=args.broadcast_ip,
         )
         host, port_str = target.rsplit(":", 1)
-        print(f"Discovered gRPC server at {target}")
+        print(f"Discovered server at {target}")
         run(host=host, port=int(port_str), timeout=args.timeout, rate_hz=args.rate, samples=args.samples)
     else:
         run(host=args.host, port=args.port, timeout=args.timeout, rate_hz=args.rate, samples=args.samples)
