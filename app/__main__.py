@@ -15,6 +15,16 @@ PAYLOAD_FORMAT = "!Iq3f4ffq"
 PAYLOAD_SIZE = struct.calcsize(PAYLOAD_FORMAT)
 
 
+def get_local_ip() -> str:
+	"""Return the primary LAN/hotspot IP (not loopback)."""
+	with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+		try:
+			s.connect(("8.8.8.8", 80))
+			return s.getsockname()[0]
+		except OSError:
+			return "127.0.0.1"
+
+
 @dataclass(slots=True)
 class HapticPacket:
 	"""Fixed 52-byte payload model for HapticNet."""
@@ -171,7 +181,10 @@ def run_sender(host: str, port: int, rate_hz: int) -> None:
 	interval = 1.0 / rate_hz
 
 	with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-		print(f"Sender started -> {host}:{port} at {rate_hz} Hz (payload={PAYLOAD_SIZE} bytes)")
+		print(f"Sender started")
+		print(f"  Local IP  : {get_local_ip()}")
+		print(f"  Target    : {host}:{port}")
+		print(f"  Rate      : {rate_hz} Hz | Payload: {PAYLOAD_SIZE} bytes")
 		while True:
 			packet = simulator.next_packet()
 			sock.sendto(packet.to_bytes(), (host, port))
@@ -186,7 +199,12 @@ def run_receiver(bind_host: str, port: int, buffer_size: int) -> None:
 	with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
 		sock.bind((bind_host, port))
 		sock.settimeout(0.02)
-		print(f"Receiver started on {bind_host}:{port} (jitter buffer={buffer_size})")
+		local_ip = get_local_ip()
+		print(f"Receiver started")
+		print(f"  Bind      : {bind_host}:{port}")
+		print(f"  Hotspot IP: {local_ip}  <-- ใช้ค่านี้เป็น --host บนเครื่อง sender")
+		print(f"  Jitter buf: {buffer_size} packets")
+		print(f"  Command   : python -m app send --host {local_ip} --port {port}")
 
 		while True:
 			try:
