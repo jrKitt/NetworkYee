@@ -93,7 +93,7 @@ python3 -m grpc server --host 0.0.0.0 --port 50051
 Terminal B (Client):
 
 ```bash
-python3 -m grpc client --host 127.0.0.1 --port 50051 --name NetworkYee
+python3 -m grpc client --host 127.0.0.1 --port 50051 --rate 100 --samples 100
 ```
 
 ### 3.3 รันข้ามเครื่อง
@@ -101,14 +101,30 @@ python3 -m grpc client --host 127.0.0.1 --port 50051 --name NetworkYee
 Machine B (Client):
 
 ```bash
-python3 -m grpc client --host <SERVER_LAN_IP> --port 50051 --name NetworkYee
+python3 -m grpc client --host <SERVER_LAN_IP> --port 50051 --rate 100 --samples 100
 ```
 
 ### 3.4 Auto-discovery
 
 ```bash
-python3 -m grpc client --discover --name NetworkYee
+python3 -m grpc client --discover --rate 100 --samples 100
 ```
+
+### 3.5 เทสให้เหมือน app มากที่สุด
+
+```bash
+# app
+python3 -m app server --bind 0.0.0.0 --port 9000 --buffer 3
+python3 -m app client --host 127.0.0.1 --port 9000 --rate 100
+
+# grpc (same motion profile + same send rate)
+python3 -m grpc server --host 0.0.0.0 --port 50051
+python3 -m grpc client --host 127.0.0.1 --port 50051 --rate 100 --samples 0
+```
+
+หมายเหตุ:
+- `--samples 0` หมายถึงส่งต่อเนื่องไม่หยุด (ใกล้พฤติกรรม app ที่สุด)
+- gRPC server จะแสดง `grpc rx ... lat=...ms` และสรุปสตรีมเมื่อจบ
 
 ## 4) Firewall / Ports
 

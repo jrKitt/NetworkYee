@@ -95,3 +95,75 @@ class Greeter(object):
             timeout,
             metadata,
             _registered_method=True)
+
+
+class HapticBridgeStub(object):
+    """Missing associated documentation comment in .proto file."""
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.StreamHaptics = channel.stream_unary(
+                '/demo.HapticBridge/StreamHaptics',
+                request_serializer=helloworld__pb2.HapticFrame.SerializeToString,
+                response_deserializer=helloworld__pb2.StreamSummary.FromString,
+                _registered_method=True)
+
+
+class HapticBridgeServicer(object):
+    """Missing associated documentation comment in .proto file."""
+
+    def StreamHaptics(self, request_iterator, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_HapticBridgeServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'StreamHaptics': grpc.stream_unary_rpc_method_handler(
+                    servicer.StreamHaptics,
+                    request_deserializer=helloworld__pb2.HapticFrame.FromString,
+                    response_serializer=helloworld__pb2.StreamSummary.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'demo.HapticBridge', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+    server.add_registered_method_handlers('demo.HapticBridge', rpc_method_handlers)
+
+
+ # This class is part of an EXPERIMENTAL API.
+class HapticBridge(object):
+    """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def StreamHaptics(request_iterator,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.stream_unary(
+            request_iterator,
+            target,
+            '/demo.HapticBridge/StreamHaptics',
+            helloworld__pb2.HapticFrame.SerializeToString,
+            helloworld__pb2.StreamSummary.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)

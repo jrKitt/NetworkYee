@@ -26,8 +26,9 @@ def build_parser() -> argparse.ArgumentParser:
     client_parser = subparsers.add_parser("client", help="Run gRPC client")
     client_parser.add_argument("--host", default="127.0.0.1")
     client_parser.add_argument("--port", type=int, default=50051)
-    client_parser.add_argument("--name", default="World")
     client_parser.add_argument("--timeout", type=float, default=5.0)
+    client_parser.add_argument("--rate", type=int, default=100)
+    client_parser.add_argument("--samples", type=int, default=100)
     client_parser.add_argument("--discover", action="store_true")
     client_parser.add_argument("--discovery-port", type=int, default=50052)
     client_parser.add_argument("--broadcast-ip", default="255.255.255.255")
@@ -54,10 +55,12 @@ def main() -> None:
             args.host,
             "--port",
             str(args.port),
-            "--name",
-            args.name,
             "--timeout",
             str(args.timeout),
+            "--rate",
+            str(args.rate),
+            "--samples",
+            str(args.samples),
             "--discovery-port",
             str(args.discovery_port),
             "--broadcast-ip",

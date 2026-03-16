@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10helloworld.proto\x12\x04\x64\x65mo\"\x1c\n\x0cHelloRequest\x12\x0c\n\x04name\x18\x01 \x01(\t\"\x1d\n\nHelloReply\x12\x0f\n\x07message\x18\x01 \x01(\t2;\n\x07Greeter\x12\x30\n\x08SayHello\x12\x12.demo.HelloRequest\x1a\x10.demo.HelloReplyb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10helloworld.proto\x12\x04\x64\x65mo\"\x1c\n\x0cHelloRequest\x12\x0c\n\x04name\x18\x01 \x01(\t\"\x1d\n\nHelloReply\x12\x0f\n\x07message\x18\x01 \x01(\t\"\xc1\x01\n\x0bHapticFrame\x12\x10\n\x08sequence\x18\x01 \x01(\x04\x12\x14\n\x0ctimestamp_ns\x18\x02 \x01(\x03\x12\r\n\x05pos_x\x18\x03 \x01(\x02\x12\r\n\x05pos_y\x18\x04 \x01(\x02\x12\r\n\x05pos_z\x18\x05 \x01(\x02\x12\r\n\x05rot_w\x18\x06 \x01(\x02\x12\r\n\x05rot_x\x18\x07 \x01(\x02\x12\r\n\x05rot_y\x18\x08 \x01(\x02\x12\r\n\x05rot_z\x18\t \x01(\x02\x12\r\n\x05\x66orce\x18\n \x01(\x02\x12\x12\n\ntexture_id\x18\x0b \x01(\x03\"\x85\x01\n\rStreamSummary\x12\x18\n\x10received_packets\x18\x01 \x01(\x04\x12\x16\n\x0e\x61vg_latency_ms\x18\x02 \x01(\x01\x12\x16\n\x0emin_latency_ms\x18\x03 \x01(\x01\x12\x16\n\x0emax_latency_ms\x18\x04 \x01(\x01\x12\x12\n\nduration_s\x18\x05 \x01(\x01\x32;\n\x07Greeter\x12\x30\n\x08SayHello\x12\x12.demo.HelloRequest\x1a\x10.demo.HelloReply2I\n\x0cHapticBridge\x12\x39\n\rStreamHaptics\x12\x11.demo.HapticFrame\x1a\x13.demo.StreamSummary(\x01\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -35,6 +35,12 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_HELLOREQUEST']._serialized_end=54
   _globals['_HELLOREPLY']._serialized_start=56
   _globals['_HELLOREPLY']._serialized_end=85
-  _globals['_GREETER']._serialized_start=87
-  _globals['_GREETER']._serialized_end=146
+  _globals['_HAPTICFRAME']._serialized_start=88
+  _globals['_HAPTICFRAME']._serialized_end=281
+  _globals['_STREAMSUMMARY']._serialized_start=284
+  _globals['_STREAMSUMMARY']._serialized_end=417
+  _globals['_GREETER']._serialized_start=419
+  _globals['_GREETER']._serialized_end=478
+  _globals['_HAPTICBRIDGE']._serialized_start=480
+  _globals['_HAPTICBRIDGE']._serialized_end=553
 # @@protoc_insertion_point(module_scope)

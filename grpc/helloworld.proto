@@ -6,10 +6,36 @@ service Greeter {
   rpc SayHello (HelloRequest) returns (HelloReply);
 }
 
+service HapticBridge {
+  rpc StreamHaptics (stream HapticFrame) returns (StreamSummary);
+}
+
 message HelloRequest {
   string name = 1;
 }
 
 message HelloReply {
   string message = 1;
+}
+
+message HapticFrame {
+  uint64 sequence = 1;
+  int64 timestamp_ns = 2;
+  float pos_x = 3;
+  float pos_y = 4;
+  float pos_z = 5;
+  float rot_w = 6;
+  float rot_x = 7;
+  float rot_y = 8;
+  float rot_z = 9;
+  float force = 10;
+  int64 texture_id = 11;
+}
+
+message StreamSummary {
+  uint64 received_packets = 1;
+  double avg_latency_ms = 2;
+  double min_latency_ms = 3;
+  double max_latency_ms = 4;
+  double duration_s = 5;
 }
