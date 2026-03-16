@@ -28,6 +28,12 @@ def build_parser() -> argparse.ArgumentParser:
     client_parser.add_argument("--port", type=int, default=50051)
     client_parser.add_argument("--name", default="World")
     client_parser.add_argument("--timeout", type=float, default=5.0)
+    client_parser.add_argument("--discover", action="store_true")
+    client_parser.add_argument("--discovery-port", type=int, default=50052)
+    client_parser.add_argument("--broadcast-ip", default="255.255.255.255")
+
+    server_parser.add_argument("--discovery-port", type=int, default=50052)
+    server_parser.add_argument("--disable-discovery", action="store_true")
 
     subparsers.add_parser("gen-proto", help="Generate protobuf Python files")
     return parser
@@ -38,12 +44,28 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "server":
-        exit_code = _run_script("server.py", ["--host", args.host, "--port", str(args.port)])
+        server_args = ["--host", args.host, "--port", str(args.port), "--discovery-port", str(args.discovery_port)]
+        if args.disable_discovery:
+            server_args.append("--disable-discovery")
+        exit_code = _run_script("server.py", server_args)
     elif args.command == "client":
-        exit_code = _run_script(
-            "client.py",
-            ["--host", args.host, "--port", str(args.port), "--name", args.name, "--timeout", str(args.timeout)],
-        )
+        client_args = [
+            "--host",
+            args.host,
+            "--port",
+            str(args.port),
+            "--name",
+            args.name,
+            "--timeout",
+            str(args.timeout),
+            "--discovery-port",
+            str(args.discovery_port),
+            "--broadcast-ip",
+            args.broadcast_ip,
+        ]
+        if args.discover:
+            client_args.append("--discover")
+        exit_code = _run_script("client.py", client_args)
     elif args.command == "gen-proto":
         command = ["bash", str(BASE_DIR / "gen_proto.sh")]
         exit_code = subprocess.run(command, check=False).returncode
