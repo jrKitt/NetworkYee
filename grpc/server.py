@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from concurrent import futures
 from pathlib import Path
 
@@ -17,7 +18,11 @@ import helloworld_pb2_grpc
 
 class Greeter(helloworld_pb2_grpc.GreeterServicer):
     def SayHello(self, request, context):
-        return helloworld_pb2.HelloReply(message=f"Hello, {request.name}!")
+        started_at = time.perf_counter()
+        reply = helloworld_pb2.HelloReply(message=f"Hello, {request.name}!")
+        latency_ms = (time.perf_counter() - started_at) * 1000.0
+        print(f"SayHello peer={context.peer()} name={request.name!r} latency_ms={latency_ms:.3f}")
+        return reply
 
 
 def serve(host: str = "0.0.0.0", port: int = 50051) -> None:
