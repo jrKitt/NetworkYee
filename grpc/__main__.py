@@ -26,7 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
     client_parser = subparsers.add_parser("client", help="Run gRPC client")
     client_parser.add_argument("--host", default="127.0.0.1")
     client_parser.add_argument("--port", type=int, default=50051)
-    client_parser.add_argument("--timeout", type=float, default=5.0)
+    client_parser.add_argument("--timeout", type=float, default=0.0)
     client_parser.add_argument("--rate", type=int, default=100)
     client_parser.add_argument("--samples", type=int, default=1000)
     client_parser.add_argument("--discover", action="store_true")

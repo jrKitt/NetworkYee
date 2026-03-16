@@ -16,6 +16,7 @@ PAYLOAD_FORMAT = "!Iq3f4ffq"
 PAYLOAD_SIZE = struct.calcsize(PAYLOAD_FORMAT)
 DISCOVERY_REQUEST = b"NETWORKYEE_HAPTIC_DISCOVER_V1"
 DISCOVERY_RESPONSE_PREFIX = "NETWORKYEE_HAPTIC_HERE "
+SUMMARY_RESPONSE_PREFIX = "NETWORKYEE_HAPTIC_SUMMARY "
 
 
 @dataclass(slots=True)
@@ -247,6 +248,38 @@ def run_sender(host: str, port: int, rate_hz: int, samples: int = 1000) -> None:
 			sent_packets += 1
 			time.sleep(interval)
 
+		if samples > 0:
+			end_marker = HapticPacket(
+				sequence=0,
+				timestamp_ns=time.time_ns(),
+				pos_x=0.0,
+				pos_y=0.0,
+				pos_z=0.0,
+				rot_w=0.0,
+				rot_x=0.0,
+				rot_y=0.0,
+				rot_z=0.0,
+				force=0.0,
+				texture_id=-1,
+			)
+			sock.sendto(end_marker.to_bytes(), (host, port))
+			sock.settimeout(2.0)
+			try:
+				payload, _ = sock.recvfrom(1024)
+				message = payload.decode("utf-8", errors="strict")
+				prefix = SUMMARY_RESPONSE_PREFIX
+				if message.startswith(prefix):
+					packets_s, avg_s, min_s, max_s, duration_s = message[len(prefix) :].split()
+					print(
+						"hapticnet stream summary "
+						f"packets={packets_s} "
+						f"lat(avg/min/max)={float(avg_s):.2f}/{float(min_s):.2f}/{float(max_s):.2f} ms "
+						f"duration={float(duration_s):.2f}s"
+					)
+					return
+			except (TimeoutError, ValueError):
+				pass
+
 	duration_s = time.perf_counter() - started_at
 	print(
 		"hapticnet stream summary "
@@ -314,6 +347,12 @@ def run_receiver(
 	jitter_buffer = JitterBuffer(capacity=buffer_size)
 	reckoner = DeadReckoner()
 	stats = ReceiverStats()
+	stream_packets = 0
+	stream_latency_sum_ms = 0.0
+	stream_latency_samples = 0
+	stream_latency_min_ms = float("inf")
+	stream_latency_max_ms = 0.0
+	stream_started_at = 0.0
 	expected_seq = 1
 	initialized_expected_seq = False
 	last_rx_at = 0.0
@@ -336,9 +375,41 @@ def run_receiver(
 
 			while True:
 				try:
-					payload, _ = sock.recvfrom(1024)
+					payload, sender_addr = sock.recvfrom(1024)
 					packet = HapticPacket.from_bytes(payload)
 					last_rx_at = time.perf_counter()
+
+					if packet.sequence == 0 and packet.texture_id == -1:
+						duration_s = max(0.0, time.perf_counter() - stream_started_at) if stream_started_at > 0 else 0.0
+						if stream_latency_samples > 0:
+							avg_latency_ms = stream_latency_sum_ms / stream_latency_samples
+							min_latency_ms = stream_latency_min_ms
+							max_latency_ms = stream_latency_max_ms
+						else:
+							avg_latency_ms = 0.0
+							min_latency_ms = 0.0
+							max_latency_ms = 0.0
+						print(
+							"hapticnet stream summary "
+							f"packets={stream_packets} "
+							f"lat(avg/min/max)={avg_latency_ms:.2f}/{min_latency_ms:.2f}/{max_latency_ms:.2f} ms "
+							f"duration={duration_s:.2f}s"
+						)
+						summary = (
+							f"{SUMMARY_RESPONSE_PREFIX}"
+							f"{stream_packets} {avg_latency_ms:.6f} {min_latency_ms:.6f} {max_latency_ms:.6f} {duration_s:.6f}"
+						).encode("utf-8")
+						sock.sendto(summary, sender_addr)
+						stream_packets = 0
+						stream_latency_sum_ms = 0.0
+						stream_latency_samples = 0
+						stream_latency_min_ms = float("inf")
+						stream_latency_max_ms = 0.0
+						stream_started_at = 0.0
+						continue
+
+					if stream_started_at == 0.0:
+						stream_started_at = time.perf_counter()
 					if not initialized_expected_seq:
 						expected_seq = packet.sequence
 						initialized_expected_seq = True
@@ -354,9 +425,14 @@ def run_receiver(
 				if in_order is not None:
 					reckoner.update(in_order)
 					stats.rx_packets += 1
+					stream_packets += 1
 					latency_ms = calculate_latency_ms(in_order.timestamp_ns)
 					if latency_ms is not None:
 						stats.add_latency(latency_ms)
+						stream_latency_sum_ms += latency_ms
+						stream_latency_samples += 1
+						stream_latency_min_ms = min(stream_latency_min_ms, latency_ms)
+						stream_latency_max_ms = max(stream_latency_max_ms, latency_ms)
 						latency_text = f"lat={latency_ms:.2f}ms"
 					else:
 						latency_text = "lat=n/a"
