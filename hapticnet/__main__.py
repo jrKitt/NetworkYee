@@ -86,6 +86,11 @@ class JitterBuffer:
 			return packet
 		return None
 
+	def peek_sequence(self) -> Optional[int]:
+		if not self._heap:
+			return None
+		return self._heap[0][0]
+
 
 class DeadReckoner:
 	"""Linear extrapolation for packet loss compensation."""
@@ -185,18 +190,15 @@ class ReceiverStats:
 		elapsed = now - self.last_print_at
 		if elapsed < 1.0:
 			return
-		if self.rx_packets == 0 and self.estimated_packets == 0 and self.out_of_order_packets == 0 and self.latency_samples == 0:
+		if self.rx_packets == 0 and self.latency_samples == 0:
 			self.last_print_at = now
 			return
 
 		rx_rate = self.rx_packets / elapsed
-		if self.latency_samples > 0:
-			lat_avg = self.latency_sum_ms / self.latency_samples
-			lat_min = self.latency_min_ms
-			lat_max = self.latency_max_ms
-			latency_text = f"lat(avg/min/max)={lat_avg:.2f}/{lat_min:.2f}/{lat_max:.2f} ms"
-		else:
-			latency_text = "lat(avg/min/max)=n/a"
+		lat_avg = self.latency_sum_ms / self.latency_samples
+		lat_min = self.latency_min_ms
+		lat_max = self.latency_max_ms
+		latency_text = f"lat(avg/min/max)={lat_avg:.2f}/{lat_min:.2f}/{lat_max:.2f} ms"
 		print(f"hapticnet stats rx={self.rx_packets} rx_rate={rx_rate:.1f} pkt/s {latency_text}")
 		self.rx_packets = 0
 		self.estimated_packets = 0
@@ -260,7 +262,9 @@ def run_sender(host: str, port: int, rate_hz: int, samples: int = 1000) -> None:
 				force=0.0,
 				texture_id=-1,
 			)
-			sock.sendto(end_marker.to_bytes(), (host, port))
+			for _ in range(3):
+				sock.sendto(end_marker.to_bytes(), (host, port))
+				time.sleep(0.002)
 			sock.settimeout(2.0)
 			try:
 				payload, _ = sock.recvfrom(1024)
@@ -353,8 +357,13 @@ def run_receiver(
 	stream_started_at = 0.0
 	expected_seq = 1
 	initialized_expected_seq = False
+	missing_since = 0.0
+	missing_wait_s = 0.03
 	last_rx_at = 0.0
 	dr_max_gap_s = 0.02
+	last_dr_at = 0.0
+	dr_emit_interval_s = 0.02
+	rx_log_every = 10
 	stop_event = threading.Event()
 	discovery_thread: Optional[threading.Thread] = None
 	if enable_discovery:
@@ -378,6 +387,8 @@ def run_receiver(
 					last_rx_at = time.perf_counter()
 
 					if packet.sequence == 0 and packet.texture_id == -1:
+						if stream_packets == 0:
+							continue
 						duration_s = max(0.0, time.perf_counter() - stream_started_at) if stream_started_at > 0 else 0.0
 						if stream_latency_samples > 0:
 							avg_latency_ms = stream_latency_sum_ms / stream_latency_samples
@@ -408,6 +419,7 @@ def run_receiver(
 						reckoner = DeadReckoner()
 						expected_seq = 1
 						initialized_expected_seq = False
+						missing_since = 0.0
 						last_rx_at = 0.0
 						continue
 
@@ -436,13 +448,26 @@ def run_receiver(
 					stream_latency_min_ms = min(stream_latency_min_ms, latency_ms)
 					stream_latency_max_ms = max(stream_latency_max_ms, latency_ms)
 					latency_text = f"lat={latency_ms:.2f}ms"
-					print(
-						f"hapticnet rx seq={in_order.sequence:04d} "
-						f"pos=({in_order.pos_x:+.3f},{in_order.pos_y:+.3f},{in_order.pos_z:+.3f}) {latency_text}"
-					)
+					if in_order.sequence == 1 or (in_order.sequence % rx_log_every) == 0:
+						print(
+							f"hapticnet rx seq={in_order.sequence:04d} "
+							f"pos=({in_order.pos_x:+.3f},{in_order.pos_y:+.3f},{in_order.pos_z:+.3f}) {latency_text}"
+						)
 					expected_seq += 1
+					missing_since = 0.0
 					stats.report(expected_seq)
 					continue
+
+				head_seq = jitter_buffer.peek_sequence()
+				now = time.perf_counter()
+				if head_seq is not None and head_seq > expected_seq:
+					if missing_since == 0.0:
+						missing_since = now
+					if (now - missing_since) < missing_wait_s:
+						stats.report(expected_seq)
+						continue
+				else:
+					missing_since = 0.0
 
 				if (time.perf_counter() - last_rx_at) > dr_max_gap_s:
 					stats.report(expected_seq)
@@ -450,6 +475,9 @@ def run_receiver(
 
 				estimated = reckoner.estimate(sequence=expected_seq, timestamp_ns=time.time_ns())
 				if estimated is not None:
+					if (now - last_dr_at) < dr_emit_interval_s:
+						continue
+					last_dr_at = now
 					stats.estimated_packets += 1
 					stats.dropped_packets += 1
 					print(
@@ -457,6 +485,7 @@ def run_receiver(
 						f"pos=({estimated.pos_x:+.3f},{estimated.pos_y:+.3f},{estimated.pos_z:+.3f})"
 					)
 					expected_seq += 1
+					missing_since = 0.0
 					stats.report(expected_seq)
 	finally:
 		stop_event.set()
