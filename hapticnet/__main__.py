@@ -404,6 +404,11 @@ def run_receiver(
 						stream_latency_min_ms = float("inf")
 						stream_latency_max_ms = 0.0
 						stream_started_at = 0.0
+						jitter_buffer = JitterBuffer(capacity=buffer_size)
+						reckoner = DeadReckoner()
+						expected_seq = 1
+						initialized_expected_seq = False
+						last_rx_at = 0.0
 						continue
 
 					if stream_started_at == 0.0:
