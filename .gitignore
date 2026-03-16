@@ -1,0 +1,9 @@
+/**/__pycache__
+*.venv
+*.env
+
+# os file
+*.DS_Store
+
+# IDE
+*.vs_code
