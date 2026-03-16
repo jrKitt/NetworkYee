@@ -16,7 +16,7 @@ def _run_script(script_name: str, args: list[str]) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run gRPC utilities")
+    parser = argparse.ArgumentParser(description="Run HapticNet gRPC utilities")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     server_parser = subparsers.add_parser("server", help="Run gRPC server")
@@ -28,7 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
     client_parser.add_argument("--port", type=int, default=50051)
     client_parser.add_argument("--timeout", type=float, default=5.0)
     client_parser.add_argument("--rate", type=int, default=100)
-    client_parser.add_argument("--samples", type=int, default=100)
+    client_parser.add_argument("--samples", type=int, default=1000)
     client_parser.add_argument("--discover", action="store_true")
     client_parser.add_argument("--discovery-port", type=int, default=50052)
     client_parser.add_argument("--broadcast-ip", default="255.255.255.255")

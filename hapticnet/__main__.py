@@ -196,7 +196,7 @@ class ReceiverStats:
 			latency_text = f"lat(avg/min/max)={lat_avg:.2f}/{lat_min:.2f}/{lat_max:.2f} ms"
 		else:
 			latency_text = "lat(avg/min/max)=n/a"
-		print(f"grpc stats rx={self.rx_packets} rx_rate={rx_rate:.1f} pkt/s {latency_text}")
+		print(f"hapticnet stats rx={self.rx_packets} rx_rate={rx_rate:.1f} pkt/s {latency_text}")
 		self.rx_packets = 0
 		self.estimated_packets = 0
 		self.out_of_order_packets = 0
@@ -233,14 +233,14 @@ def run_simulation(sample_count: int) -> None:
 		time.sleep(0.01)
 
 
-def run_sender(host: str, port: int, rate_hz: int, samples: int = 100) -> None:
+def run_sender(host: str, port: int, rate_hz: int, samples: int = 1000) -> None:
 	simulator = HapticSimulator()
 	interval = 1.0 / rate_hz
 	sent_packets = 0
 	started_at = time.perf_counter()
 
 	with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-		print(f"gRPC haptic client sending to {host}:{port} rate={rate_hz}Hz samples={samples}")
+		print(f"hapticnet client sending to {host}:{port} rate={rate_hz}Hz samples={samples}")
 		while samples <= 0 or sent_packets < samples:
 			packet = simulator.next_packet()
 			sock.sendto(packet.to_bytes(), (host, port))
@@ -249,7 +249,7 @@ def run_sender(host: str, port: int, rate_hz: int, samples: int = 100) -> None:
 
 	duration_s = time.perf_counter() - started_at
 	print(
-		"gRPC stream summary "
+		"hapticnet stream summary "
 		f"packets={sent_packets} "
 		"lat(avg/min/max)=n/a "
 		f"duration={duration_s:.2f}s"
@@ -332,7 +332,7 @@ def run_receiver(
 		with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
 			sock.bind((bind_host, port))
 			sock.settimeout(0.02)
-			print(f"app server started on {bind_host}:{port} jitter_buffer={buffer_size}")
+			print(f"hapticnet server started on {bind_host}:{port} jitter_buffer={buffer_size}")
 
 			while True:
 				try:
@@ -361,7 +361,7 @@ def run_receiver(
 					else:
 						latency_text = "lat=n/a"
 					print(
-						f"grpc rx seq={in_order.sequence:04d} "
+						f"hapticnet rx seq={in_order.sequence:04d} "
 						f"pos=({in_order.pos_x:+.3f},{in_order.pos_y:+.3f},{in_order.pos_z:+.3f}) {latency_text}"
 					)
 					expected_seq += 1
@@ -377,7 +377,7 @@ def run_receiver(
 					stats.estimated_packets += 1
 					stats.dropped_packets += 1
 					print(
-						f"grpc dr seq={estimated.sequence:04d} "
+						f"hapticnet dr seq={estimated.sequence:04d} "
 						f"pos=({estimated.pos_x:+.3f},{estimated.pos_y:+.3f},{estimated.pos_z:+.3f})"
 					)
 					expected_seq += 1
@@ -392,7 +392,7 @@ def run_client(
 	host: str,
 	port: int,
 	rate_hz: int,
-	samples: int = 100,
+	samples: int = 1000,
 	discover: bool = False,
 	discovery_port: int = 9001,
 	broadcast_ip: str = "255.255.255.255",
@@ -408,7 +408,7 @@ def run_client(
 		)
 		resolved_host, resolved_port_str = target.rsplit(":", 1)
 		resolved_port = int(resolved_port_str)
-		print(f"Discovered server at {target}")
+		print(f"Discovered hapticnet server at {target}")
 
 	run_sender(host=resolved_host, port=resolved_port, rate_hz=rate_hz, samples=samples)
 
@@ -431,7 +431,7 @@ def build_parser() -> argparse.ArgumentParser:
 	client_parser.add_argument("--host", default="127.0.0.1")
 	client_parser.add_argument("--port", type=int, default=9000)
 	client_parser.add_argument("--rate", type=int, default=100)
-	client_parser.add_argument("--samples", type=int, default=100, help="Number of packets to send (<=0 means infinite)")
+	client_parser.add_argument("--samples", type=int, default=1000, help="Number of packets to send (<=0 means infinite)")
 	client_parser.add_argument("--discover", action="store_true")
 	client_parser.add_argument("--discovery-port", type=int, default=9001)
 	client_parser.add_argument("--broadcast-ip", default="255.255.255.255")
@@ -476,7 +476,7 @@ def main() -> None:
 			timeout=args.timeout,
 			broadcast_ip=args.broadcast_ip,
 		)
-		print(f"Discovered server at {target}")
+		print(f"Discovered hapticnet server at {target}")
 
 
 if __name__ == "__main__":

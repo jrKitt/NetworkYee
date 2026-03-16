@@ -73,7 +73,7 @@ class StreamStats:
         else:
             lat_text = "lat(avg/min/max)=n/a"
 
-        print(f"grpc stats rx={self.window_packets} rx_rate={rx_rate:.1f} pkt/s {lat_text}")
+        print(f"hapticnet stats rx={self.window_packets} rx_rate={rx_rate:.1f} pkt/s {lat_text}")
         self.window_packets = 0
         self.window_latency_sum_ms = 0.0
         self.window_latency_samples = 0
@@ -98,7 +98,7 @@ class HapticBridge(helloworld_pb2_grpc.HapticBridgeServicer):
                 lat_text = "lat=n/a"
 
             print(
-                f"grpc rx seq={frame.sequence:04d} "
+                f"hapticnet rx seq={frame.sequence:04d} "
                 f"pos=({frame.pos_x:+.3f},{frame.pos_y:+.3f},{frame.pos_z:+.3f}) {lat_text}"
             )
             stats.report_if_due()
@@ -114,8 +114,10 @@ class HapticBridge(helloworld_pb2_grpc.HapticBridgeServicer):
             max_latency_ms = 0.0
 
         print(
-            f"grpc stream completed packets={stats.received_packets} "
-            f"duration={duration_s:.2f}s avg_lat={avg_latency_ms:.2f}ms"
+            "hapticnet stream summary "
+            f"packets={stats.received_packets} "
+            f"lat(avg/min/max)={avg_latency_ms:.2f}/{min_latency_ms:.2f}/{max_latency_ms:.2f} ms "
+            f"duration={duration_s:.2f}s"
         )
         return helloworld_pb2.StreamSummary(
             received_packets=stats.received_packets,
@@ -131,7 +133,7 @@ def _discovery_server(grpc_port: int, discovery_port: int, stop_event: threading
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind(("0.0.0.0", discovery_port))
         sock.settimeout(0.5)
-        print(f"Discovery listener started on 0.0.0.0:{discovery_port} -> grpc port {grpc_port}")
+        print(f"Discovery listener started on 0.0.0.0:{discovery_port} -> hapticnet grpc port {grpc_port}")
         while not stop_event.is_set():
             try:
                 payload, addr = sock.recvfrom(1024)
@@ -168,7 +170,7 @@ def serve(
     helloworld_pb2_grpc.add_HapticBridgeServicer_to_server(HapticBridge(), server)
     server.add_insecure_port(f"{host}:{port}")
     server.start()
-    print(f"gRPC server started on {host}:{port}")
+    print(f"hapticnet server started on {host}:{port}")
     try:
         server.wait_for_termination()
     finally:

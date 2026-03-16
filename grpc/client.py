@@ -71,15 +71,15 @@ def _frame_stream(rate_hz: int, samples: int) -> object:
         time.sleep(interval)
 
 
-def run(host: str = "127.0.0.1", port: int = 50051, timeout: float = 5.0, rate_hz: int = 100, samples: int = 100) -> None:
+def run(host: str = "127.0.0.1", port: int = 50051, timeout: float = 5.0, rate_hz: int = 100, samples: int = 1000) -> None:
     target = f"{host}:{port}"
     with grpc.insecure_channel(target) as channel:
         grpc.channel_ready_future(channel).result(timeout=timeout)
         stub = helloworld_pb2_grpc.HapticBridgeStub(channel)
-        print(f"gRPC haptic client sending to {target} rate={rate_hz}Hz samples={samples}")
+        print(f"hapticnet client sending to {target} rate={rate_hz}Hz samples={samples}")
         response = stub.StreamHaptics(_frame_stream(rate_hz=rate_hz, samples=samples), timeout=timeout)
         print(
-            "gRPC stream summary "
+            "hapticnet stream summary "
             f"packets={response.received_packets} "
             f"lat(avg/min/max)={response.avg_latency_ms:.2f}/{response.min_latency_ms:.2f}/{response.max_latency_ms:.2f} ms "
             f"duration={response.duration_s:.2f}s"
@@ -87,12 +87,12 @@ def run(host: str = "127.0.0.1", port: int = 50051, timeout: float = 5.0, rate_h
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run gRPC Haptic client")
+    parser = argparse.ArgumentParser(description="Run HapticNet gRPC client")
     parser.add_argument("--host", default="127.0.0.1", help="Server IP/hostname (use remote machine IP for cross-machine)")
     parser.add_argument("--port", type=int, default=50051)
     parser.add_argument("--timeout", type=float, default=5.0)
     parser.add_argument("--rate", type=int, default=100)
-    parser.add_argument("--samples", type=int, default=100, help="Number of frames to send (<=0 means infinite)")
+    parser.add_argument("--samples", type=int, default=1000, help="Number of frames to send (<=0 means infinite)")
     parser.add_argument("--discover", action="store_true", help="Auto-discover server IP via UDP broadcast")
     parser.add_argument("--discovery-port", type=int, default=50052)
     parser.add_argument("--broadcast-ip", default="255.255.255.255")
@@ -104,7 +104,7 @@ if __name__ == "__main__":
             broadcast_ip=args.broadcast_ip,
         )
         host, port_str = target.rsplit(":", 1)
-        print(f"Discovered server at {target}")
+        print(f"Discovered hapticnet server at {target}")
         run(host=host, port=int(port_str), timeout=args.timeout, rate_hz=args.rate, samples=args.samples)
     else:
         run(host=args.host, port=args.port, timeout=args.timeout, rate_hz=args.rate, samples=args.samples)
