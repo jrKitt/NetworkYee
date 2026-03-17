@@ -61,29 +61,38 @@ class HapticPacket:
 
 
 class JitterBuffer:
-	"""Small reordering buffer for out-of-order UDP packets."""
+	"""Small reordering buffer for out-of-order UDP packets.
+
+	Optimized: store raw payload bytes and sequence number only. Delay full
+	struct.unpack until a packet is about to be consumed. This avoids the
+	cost of unpacking every received packet when most will sit in the buffer.
+	"""
 
 	def __init__(self, capacity: int = 3):
 		self.capacity = capacity
-		self._heap: List[Tuple[int, HapticPacket]] = []
+		# heap of (sequence, payload_bytes)
+		self._heap: List[Tuple[int, bytes]] = []
 
-	def push(self, packet: HapticPacket, expected_seq: int) -> bool:
-		if packet.sequence < expected_seq:
+	def push(self, sequence: int, payload: bytes, expected_seq: int) -> bool:
+		# drop old packets older than expected
+		if sequence < expected_seq:
 			return False
 
-		heapq.heappush(self._heap, (packet.sequence, packet))
+		heapq.heappush(self._heap, (sequence, payload))
+		# keep only the newest 'capacity' entries (drop smallest if over)
 		while len(self._heap) > self.capacity:
 			heapq.heappop(self._heap)
 		return True
 
-	def pop_expected(self, expected_seq: int) -> Optional[HapticPacket]:
+	def pop_expected(self, expected_seq: int) -> Optional[bytes]:
+		"""Return raw payload bytes if the expected sequence is available."""
 		if not self._heap:
 			return None
 
-		seq, packet = self._heap[0]
+		seq, payload = self._heap[0]
 		if seq == expected_seq:
 			heapq.heappop(self._heap)
-			return packet
+			return payload
 		return None
 
 	def peek_sequence(self) -> Optional[int]:
@@ -383,61 +392,70 @@ def run_receiver(
 			while True:
 				try:
 					payload, sender_addr = sock.recvfrom(1024)
-					packet = HapticPacket.from_bytes(payload)
+					# Reject packets with wrong size quickly
+					if len(payload) != PAYLOAD_SIZE:
+						continue
+					# Fast parse of sequence (first 4 bytes, network byte order)
+					seq = int.from_bytes(payload[0:4], "big", signed=False)
 					last_rx_at = time.perf_counter()
 
-					if packet.sequence == 0 and packet.texture_id == -1:
-						if stream_packets == 0:
+					# end-of-stream marker (sequence==0 and texture_id==-1)
+					if seq == 0:
+						# need full unpack to read texture_id
+						packet = HapticPacket.from_bytes(payload)
+						if packet.texture_id == -1:
+							if stream_packets == 0:
+								continue
+							duration_s = max(0.0, time.perf_counter() - stream_started_at) if stream_started_at > 0 else 0.0
+							if stream_latency_samples > 0:
+								avg_latency_ms = stream_latency_sum_ms / stream_latency_samples
+								min_latency_ms = stream_latency_min_ms
+								max_latency_ms = stream_latency_max_ms
+							else:
+								avg_latency_ms = 0.0
+								min_latency_ms = 0.0
+								max_latency_ms = 0.0
+							print(
+								"hapticnet stream summary "
+								f"packets={stream_packets} "
+								f"lat(avg/min/max)={avg_latency_ms:.2f}/{min_latency_ms:.2f}/{max_latency_ms:.2f} ms "
+							)
+							summary = (
+								f"{SUMMARY_RESPONSE_PREFIX}"
+								f"{stream_packets} {avg_latency_ms:.6f} {min_latency_ms:.6f} {max_latency_ms:.6f} {duration_s:.6f}"
+							).encode("utf-8")
+							sock.sendto(summary, sender_addr)
+							stream_packets = 0
+							stream_latency_sum_ms = 0.0
+							stream_latency_samples = 0
+							stream_latency_min_ms = float("inf")
+							stream_latency_max_ms = 0.0
+							stream_started_at = 0.0
+							jitter_buffer = JitterBuffer(capacity=buffer_size)
+							reckoner = DeadReckoner()
+							expected_seq = 1
+							initialized_expected_seq = False
+							missing_since = 0.0
+							last_rx_at = 0.0
 							continue
-						duration_s = max(0.0, time.perf_counter() - stream_started_at) if stream_started_at > 0 else 0.0
-						if stream_latency_samples > 0:
-							avg_latency_ms = stream_latency_sum_ms / stream_latency_samples
-							min_latency_ms = stream_latency_min_ms
-							max_latency_ms = stream_latency_max_ms
-						else:
-							avg_latency_ms = 0.0
-							min_latency_ms = 0.0
-							max_latency_ms = 0.0
-						print(
-							"hapticnet stream summary "
-							f"packets={stream_packets} "
-							f"lat(avg/min/max)={avg_latency_ms:.2f}/{min_latency_ms:.2f}/{max_latency_ms:.2f} ms "
-							f"duration={duration_s:.2f}s"
-						)
-						summary = (
-							f"{SUMMARY_RESPONSE_PREFIX}"
-							f"{stream_packets} {avg_latency_ms:.6f} {min_latency_ms:.6f} {max_latency_ms:.6f} {duration_s:.6f}"
-						).encode("utf-8")
-						sock.sendto(summary, sender_addr)
-						stream_packets = 0
-						stream_latency_sum_ms = 0.0
-						stream_latency_samples = 0
-						stream_latency_min_ms = float("inf")
-						stream_latency_max_ms = 0.0
-						stream_started_at = 0.0
-						jitter_buffer = JitterBuffer(capacity=buffer_size)
-						reckoner = DeadReckoner()
-						expected_seq = 1
-						initialized_expected_seq = False
-						missing_since = 0.0
-						last_rx_at = 0.0
-						continue
 
 					if stream_started_at == 0.0:
 						stream_started_at = time.perf_counter()
 					if not initialized_expected_seq:
-						expected_seq = packet.sequence
+						expected_seq = seq
 						initialized_expected_seq = True
-					if packet.sequence > expected_seq:
+					if seq > expected_seq:
 						stats.out_of_order_packets += 1
-					jitter_buffer.push(packet, expected_seq=expected_seq)
+					# store raw payload to avoid unpacking unless needed
+					jitter_buffer.push(seq, payload, expected_seq=expected_seq)
 				except socket.timeout:
 					pass
 				except ValueError:
 					continue
 
-				in_order = jitter_buffer.pop_expected(expected_seq)
-				if in_order is not None:
+				in_order_payload = jitter_buffer.pop_expected(expected_seq)
+				if in_order_payload is not None:
+					in_order = HapticPacket.from_bytes(in_order_payload)
 					reckoner.update(in_order)
 					stats.rx_packets += 1
 					stream_packets += 1
