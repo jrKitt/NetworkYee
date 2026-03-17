@@ -1,0 +1,1255 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NetworkYee — HapticNet Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      :root {
+        --bg-base: #0d0f14;
+        --bg-card: #151820;
+        --bg-card2: #1c2030;
+        --border: #252a3a;
+        --accent-h: #6c8ef7;
+        --accent-g: #3ecf8e;
+        --accent-dr: #f5a623;
+        --accent-red: #e05c5c;
+        --text: #e1e4f0;
+        --muted: #6b7394;
+        --tag-real: rgba(62, 207, 142, 0.15);
+        --tag-dr: rgba(245, 166, 35, 0.15);
+      }
+
+      html,
+      body {
+        height: 100%;
+        font-family: "Inter", sans-serif;
+        background: var(--bg-base);
+        color: var(--text);
+        font-size: 14px;
+      }
+
+      /* ── Layout ───────────────────────────────────────── */
+      .app {
+        display: grid;
+        grid-template-rows: 56px 1fr;
+        height: 100vh;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 24px;
+        border-bottom: 1px solid var(--border);
+        background: var(--bg-card);
+      }
+      header .logo {
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: -0.5px;
+      }
+      header .logo span {
+        color: var(--accent-h);
+      }
+      header .badge {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 10px;
+        border-radius: 99px;
+        background: rgba(108, 142, 247, 0.15);
+        color: var(--accent-h);
+        letter-spacing: 0.5px;
+      }
+      header .status-dot {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--muted);
+      }
+      .dot.live {
+        background: var(--accent-g);
+        box-shadow: 0 0 6px var(--accent-g);
+        animation: pulse 2s infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+
+      main {
+        display: grid;
+        grid-template-columns: 360px 1fr;
+        gap: 0;
+        overflow: hidden;
+      }
+
+      /* ── Sidebar ──────────────────────────────────────── */
+      .sidebar {
+        border-right: 1px solid var(--border);
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
+      .section {
+        padding: 20px;
+        border-bottom: 1px solid var(--border);
+      }
+      .section-title {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 14px;
+      }
+
+      /* Protocol tabs */
+      .tabs {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 16px;
+      }
+      .tab-btn {
+        flex: 1;
+        padding: 7px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .tab-btn.active {
+        background: var(--accent-h);
+        border-color: var(--accent-h);
+        color: #fff;
+      }
+      .tab-btn.grpc.active {
+        background: var(--accent-g);
+        border-color: var(--accent-g);
+        color: #000;
+      }
+
+      /* Form */
+      .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      label {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 500;
+      }
+      label.full {
+        grid-column: 1/-1;
+      }
+      input[type="text"],
+      input[type="number"] {
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--bg-base);
+        color: var(--text);
+        font-size: 13px;
+        font-family: "JetBrains Mono", monospace;
+        outline: none;
+        transition: border-color 0.2s;
+      }
+      input:focus {
+        border-color: var(--accent-h);
+      }
+
+      .btn-row {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .btn {
+        flex: 1;
+        padding: 10px;
+        border-radius: 8px;
+        border: none;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s;
+        letter-spacing: 0.3px;
+      }
+      .btn-start {
+        background: var(--accent-h);
+        color: #fff;
+      }
+      .btn-start:hover {
+        filter: brightness(1.15);
+      }
+      .btn-start.grpc {
+        background: var(--accent-g);
+        color: #000;
+      }
+      .btn-stop {
+        background: var(--bg-card2);
+        color: var(--muted);
+        border: 1px solid var(--border);
+      }
+      .btn-stop:hover {
+        border-color: var(--accent-red);
+        color: var(--accent-red);
+      }
+      .btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+
+      /* Packet loss */
+      .loss-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .loss-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .loss-label {
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 500;
+        min-width: 60px;
+      }
+      input[type="range"] {
+        flex: 1;
+        accent-color: var(--accent-red);
+      }
+      .loss-val {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 13px;
+        min-width: 34px;
+        text-align: right;
+        color: var(--accent-red);
+        font-weight: 600;
+      }
+      .btn-apply {
+        padding: 7px 14px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--bg-base);
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .btn-apply:hover {
+        border-color: var(--accent-red);
+        color: var(--accent-red);
+      }
+
+      /* ── Dashboard ────────────────────────────────────── */
+      .dashboard {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        overflow: hidden;
+      }
+
+      .metrics-row {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 1px;
+        background: var(--border);
+        border-bottom: 1px solid var(--border);
+      }
+      .metric-card {
+        background: var(--bg-card);
+        padding: 14px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .metric-card .label {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .metric-card .value {
+        font-size: 22px;
+        font-family: "JetBrains Mono", monospace;
+        font-weight: 600;
+        line-height: 1.2;
+      }
+      .metric-card .sub {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .v-h {
+        color: var(--accent-h);
+      }
+      .v-g {
+        color: var(--accent-g);
+      }
+      .v-dr {
+        color: var(--accent-dr);
+      }
+      .v-r {
+        color: var(--accent-red);
+      }
+
+      .charts-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1px;
+        background: var(--border);
+        border-bottom: 1px solid var(--border);
+        padding: 0;
+      }
+      .chart-card {
+        background: var(--bg-card);
+        padding: 16px 20px;
+      }
+      .chart-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--muted);
+        margin-bottom: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .chart-wrap {
+        position: relative;
+        height: 140px;
+      }
+
+      .log-area {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        background: var(--bg-card);
+      }
+      .log-header {
+        display: grid;
+        grid-template-columns: 70px 70px 90px 90px 70px 90px 90px;
+        padding: 8px 16px;
+        border-bottom: 1px solid var(--border);
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        color: var(--muted);
+      }
+      .log-body {
+        flex: 1;
+        overflow-y: auto;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 12px;
+      }
+      .log-row {
+        display: grid;
+        grid-template-columns: 70px 70px 90px 90px 70px 90px 90px;
+        padding: 5px 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        animation: fadein 0.3s ease;
+      }
+      .log-row:hover {
+        background: rgba(255, 255, 255, 0.03);
+      }
+      @keyframes fadein {
+        from {
+          opacity: 0;
+          transform: translateY(-4px);
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      .tag {
+        display: inline-block;
+        font-size: 10px;
+        font-weight: 700;
+        padding: 1px 7px;
+        border-radius: 4px;
+        letter-spacing: 0.3px;
+      }
+      .tag-h {
+        background: rgba(108, 142, 247, 0.2);
+        color: var(--accent-h);
+      }
+      .tag-g {
+        background: rgba(62, 207, 142, 0.2);
+        color: var(--accent-g);
+      }
+      .tag-real {
+        background: var(--tag-real);
+        color: var(--accent-g);
+      }
+      .tag-dr {
+        background: var(--tag-dr);
+        color: var(--accent-dr);
+      }
+
+      /* ── Position Canvas Panel ────────────────────────────── */
+      .canvas-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1px;
+        background: var(--border);
+        border-bottom: 1px solid var(--border);
+      }
+      .canvas-card {
+        background: var(--bg-card);
+        padding: 14px 18px;
+      }
+      .canvas-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+      }
+      .canvas-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .canvas-legend {
+        display: flex;
+        gap: 10px;
+        font-size: 11px;
+        color: var(--muted);
+        align-items: center;
+      }
+      .canvas-legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .canvas-legend .swatch {
+        display: inline-block;
+        width: 16px;
+        height: 3px;
+        border-radius: 2px;
+      }
+      .btn-clear {
+        padding: 3px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--muted);
+        font-size: 11px;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .btn-clear:hover {
+        border-color: var(--accent-red);
+        color: var(--accent-red);
+      }
+      .pos-canvas-wrap {
+        position: relative;
+        height: 180px;
+      }
+      .pos-canvas-wrap canvas {
+        width: 100% !important;
+        height: 100% !important;
+        display: block;
+        border-radius: 6px;
+      }
+
+      /* Scrollbar */
+      ::-webkit-scrollbar {
+        width: 5px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 3px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <!-- Header -->
+      <header>
+        <div class="logo">Network<span>Yee</span></div>
+        <div class="badge">HAPTICNET DASHBOARD</div>
+        <div class="status-dot">
+          <div class="dot" id="wsDot"></div>
+          <span id="wsStatus">Connecting…</span>
+        </div>
+      </header>
+
+      <main>
+        <!-- ═══════════════ SIDEBAR ═══════════════ -->
+        <aside class="sidebar">
+          <!-- Client Control -->
+          <div class="section">
+            <div class="section-title">Client Control</div>
+            <div class="tabs">
+              <button
+                class="tab-btn active"
+                id="tabH"
+                onclick="switchTab('hapticnet')"
+              >
+                HapticNet UDP
+              </button>
+              <button
+                class="tab-btn grpc"
+                id="tabG"
+                onclick="switchTab('grpc')"
+              >
+                gRPC TCP
+              </button>
+            </div>
+
+            <div id="panelHapticnet">
+              <div class="form-grid">
+                <label class="full"
+                  >Host
+                  <input type="text" id="h_host" value="127.0.0.1" />
+                </label>
+                <label
+                  >Port
+                  <input type="number" id="h_port" value="9000" />
+                </label>
+                <label
+                  >Rate (Hz)
+                  <input type="number" id="h_rate" value="100" />
+                </label>
+                <label class="full"
+                  >Samples
+                  <input type="number" id="h_samples" value="1000" />
+                </label>
+              </div>
+              <div class="btn-row">
+                <button
+                  class="btn btn-start"
+                  id="btnHStart"
+                  onclick="startClient('hapticnet')"
+                >
+                  ▶ Start
+                </button>
+                <button
+                  class="btn btn-stop"
+                  id="btnHStop"
+                  onclick="stopClient('hapticnet')"
+                  disabled
+                >
+                  ■ Stop
+                </button>
+              </div>
+            </div>
+
+            <div id="panelGrpc" style="display: none">
+              <div class="form-grid">
+                <label class="full"
+                  >Host
+                  <input type="text" id="g_host" value="127.0.0.1" />
+                </label>
+                <label
+                  >Port
+                  <input type="number" id="g_port" value="50051" />
+                </label>
+                <label
+                  >Rate (Hz)
+                  <input type="number" id="g_rate" value="100" />
+                </label>
+                <label class="full"
+                  >Samples
+                  <input type="number" id="g_samples" value="1000" />
+                </label>
+              </div>
+              <div class="btn-row">
+                <button
+                  class="btn btn-start grpc"
+                  id="btnGStart"
+                  onclick="startClient('grpc')"
+                >
+                  ▶ Start
+                </button>
+                <button
+                  class="btn btn-stop"
+                  id="btnGStop"
+                  onclick="stopClient('grpc')"
+                  disabled
+                >
+                  ■ Stop
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Packet Loss Injection -->
+          <div class="section">
+            <div class="section-title">🔴 Fake Packet Loss</div>
+            <div class="loss-wrap">
+              <div>
+                <div
+                  style="
+                    font-size: 11px;
+                    color: var(--muted);
+                    margin-bottom: 6px;
+                    font-weight: 600;
+                  "
+                >
+                  HapticNet UDP
+                </div>
+                <div class="loss-row">
+                  <span class="loss-label">Loss</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="50"
+                    value="0"
+                    step="1"
+                    id="lossH"
+                    oninput="updateLossLabel('H')"
+                  />
+                  <span class="loss-val" id="lossHVal">0%</span>
+                  <button class="btn-apply" onclick="applyLoss('hapticnet')">
+                    Apply
+                  </button>
+                </div>
+              </div>
+              <div>
+                <div
+                  style="
+                    font-size: 11px;
+                    color: var(--muted);
+                    margin-bottom: 6px;
+                    font-weight: 600;
+                  "
+                >
+                  gRPC TCP
+                </div>
+                <div class="loss-row">
+                  <span class="loss-label">Loss</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="50"
+                    value="0"
+                    step="1"
+                    id="lossG"
+                    oninput="updateLossLabel('G')"
+                  />
+                  <span class="loss-val" id="lossGVal">0%</span>
+                  <button class="btn-apply" onclick="applyLoss('grpc')">
+                    Apply
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Legend -->
+          <div class="section">
+            <div class="section-title">Legend</div>
+            <div
+              style="
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                font-size: 12px;
+                color: var(--muted);
+              "
+            >
+              <div>
+                <span class="tag tag-h">HAPTIC</span> &nbsp; HapticNet UDP data
+              </div>
+              <div>
+                <span class="tag tag-g">GRPC</span> &nbsp; gRPC TCP data
+              </div>
+              <div>
+                <span class="tag tag-real">REAL</span> &nbsp; Received packet
+              </div>
+              <div>
+                <span class="tag tag-dr">DR</span> &nbsp; Dead Reckoned estimate
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <!-- ═══════════════ DASHBOARD ═══════════════ -->
+        <div class="dashboard">
+          <!-- Metric Cards -->
+          <div class="metrics-row">
+            <div class="metric-card">
+              <div class="label">HapticNet RX</div>
+              <div class="value v-h" id="mHRx">0</div>
+              <div class="sub">packets total</div>
+            </div>
+            <div class="metric-card">
+              <div class="label">H Latency avg</div>
+              <div class="value v-h" id="mHLat">—</div>
+              <div class="sub">milliseconds</div>
+            </div>
+            <div class="metric-card">
+              <div class="label">Dead Reckoned</div>
+              <div class="value v-dr" id="mHDr">0</div>
+              <div class="sub">estimated pkts</div>
+            </div>
+            <div class="metric-card">
+              <div class="label">gRPC RX</div>
+              <div class="value v-g" id="mGRx">0</div>
+              <div class="sub">packets total</div>
+            </div>
+            <div class="metric-card">
+              <div class="label">G Latency avg</div>
+              <div class="value v-g" id="mGLat">—</div>
+              <div class="sub">milliseconds</div>
+            </div>
+            <div class="metric-card">
+              <div class="label">G DR / Dropped</div>
+              <div class="value v-r" id="mGDrop">0</div>
+              <div class="sub">dropped (no DR)</div>
+            </div>
+          </div>
+
+          <!-- Charts -->
+          <div class="charts-row">
+            <div class="chart-card">
+              <div class="chart-title">Latency over time (ms)</div>
+              <div class="chart-wrap"><canvas id="latencyChart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-title">Packet rate (pkt/s)</div>
+              <div class="chart-wrap"><canvas id="rateChart"></canvas></div>
+            </div>
+          </div>
+
+          <!-- Position / Force Canvas -->
+          <div class="canvas-row">
+            <div class="canvas-card">
+              <div class="canvas-header">
+                <div>
+                  <div class="canvas-title">HapticNet — Position XY Trail</div>
+                  <div class="canvas-legend">
+                    <span
+                      ><span class="swatch" style="background: #6c8ef7"></span
+                      >REAL</span
+                    >
+                    <span
+                      ><span class="swatch" style="background: #f5a623"></span
+                      >DR</span
+                    >
+                    <span style="font-size: 10px">width = force</span>
+                  </div>
+                </div>
+                <button class="btn-clear" onclick="clearCanvas('h')">
+                  Clear
+                </button>
+              </div>
+              <div class="pos-canvas-wrap">
+                <canvas id="posCanvasH"></canvas>
+              </div>
+            </div>
+            <div class="canvas-card">
+              <div class="canvas-header">
+                <div>
+                  <div class="canvas-title">gRPC — Position XY Trail</div>
+                  <div class="canvas-legend">
+                    <span
+                      ><span class="swatch" style="background: #3ecf8e"></span
+                      >REAL</span
+                    >
+                    <span style="font-size: 10px">width = force</span>
+                  </div>
+                </div>
+                <button class="btn-clear" onclick="clearCanvas('g')">
+                  Clear
+                </button>
+              </div>
+              <div class="pos-canvas-wrap">
+                <canvas id="posCanvasG"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Log Table -->
+          <div class="log-area">
+            <div class="log-header">
+              <span>Proto</span>
+              <span>Seq</span>
+              <span>Pos X</span>
+              <span>Pos Y</span>
+              <span>Force</span>
+              <span>Latency</span>
+              <span>Source</span>
+            </div>
+            <div class="log-body" id="logBody"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      // ── WebSocket ─────────────────────────────────────────────────────────────
+      let ws;
+      const MAX_LOG_ROWS = 200;
+
+      // Counters
+      const stats = {
+        h: { rx: 0, dr: 0, latSum: 0, latN: 0, rateN: 0 },
+        g: { rx: 0, drop: 0, latSum: 0, latN: 0, rateN: 0 },
+      };
+
+      // Chart data
+      const CHART_MAX = 60;
+      const labels = Array.from({ length: CHART_MAX }, (_, i) => "");
+      const hLatData = Array(CHART_MAX).fill(null);
+      const gLatData = Array(CHART_MAX).fill(null);
+      const hRateData = Array(CHART_MAX).fill(null);
+      const gRateData = Array(CHART_MAX).fill(null);
+
+      function makeChart(id, datasets) {
+        return new Chart(document.getElementById(id), {
+          type: "line",
+          data: { labels, datasets },
+          options: {
+            animation: false,
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { labels: { color: "#6b7394", font: { size: 11 } } },
+            },
+            scales: {
+              x: { display: false },
+              y: {
+                grid: { color: "rgba(255,255,255,.05)" },
+                ticks: { color: "#6b7394", font: { size: 10 } },
+              },
+            },
+          },
+        });
+      }
+
+      const latencyChart = makeChart("latencyChart", [
+        {
+          label: "HapticNet",
+          data: hLatData,
+          borderColor: "#6c8ef7",
+          backgroundColor: "rgba(108,142,247,.08)",
+          borderWidth: 2,
+          tension: 0.4,
+          pointRadius: 0,
+          fill: true,
+        },
+        {
+          label: "gRPC",
+          data: gLatData,
+          borderColor: "#3ecf8e",
+          backgroundColor: "rgba(62,207,142,.08)",
+          borderWidth: 2,
+          tension: 0.4,
+          pointRadius: 0,
+          fill: true,
+        },
+      ]);
+      const rateChart = makeChart("rateChart", [
+        {
+          label: "HapticNet",
+          data: hRateData,
+          borderColor: "#6c8ef7",
+          backgroundColor: "rgba(108,142,247,.08)",
+          borderWidth: 2,
+          tension: 0.4,
+          pointRadius: 0,
+          fill: true,
+        },
+        {
+          label: "gRPC",
+          data: gRateData,
+          borderColor: "#3ecf8e",
+          backgroundColor: "rgba(62,207,142,.08)",
+          borderWidth: 2,
+          tension: 0.4,
+          pointRadius: 0,
+          fill: true,
+        },
+      ]);
+
+      // Flush chart + metrics every second
+      setInterval(() => {
+        const hLat = stats.h.latN
+          ? (stats.h.latSum / stats.h.latN).toFixed(2)
+          : null;
+        const gLat = stats.g.latN
+          ? (stats.g.latSum / stats.g.latN).toFixed(2)
+          : null;
+
+        pushChart(hLatData, hLat);
+        pushChart(gLatData, gLat);
+        pushChart(hRateData, stats.h.rateN);
+        pushChart(gRateData, stats.g.rateN);
+
+        latencyChart.update();
+        rateChart.update();
+
+        if (hLat !== null)
+          document.getElementById("mHLat").textContent = hLat + " ms";
+        if (gLat !== null)
+          document.getElementById("mGLat").textContent = gLat + " ms";
+        document.getElementById("mHRx").textContent = stats.h.rx;
+        document.getElementById("mHDr").textContent = stats.h.dr;
+        document.getElementById("mGRx").textContent = stats.g.rx;
+        document.getElementById("mGDrop").textContent = stats.g.drop;
+
+        // Reset per-second accumulators
+        stats.h.latSum = stats.h.latN = stats.h.rateN = 0;
+        stats.g.latSum = stats.g.latN = stats.g.rateN = 0;
+      }, 1000);
+
+      function pushChart(arr, val) {
+        arr.push(val);
+        if (arr.length > CHART_MAX) arr.shift();
+      }
+
+      // ── WebSocket lifecycle ───────────────────────────────────────────────────
+      function connectWS() {
+        ws = new WebSocket(`ws://${location.host}/ws`);
+
+        ws.onopen = () => {
+          document.getElementById("wsDot").classList.add("live");
+          document.getElementById("wsStatus").textContent = "Connected";
+        };
+
+        ws.onclose = () => {
+          document.getElementById("wsDot").classList.remove("live");
+          document.getElementById("wsStatus").textContent = "Reconnecting…";
+          setTimeout(connectWS, 2000);
+        };
+
+        ws.onmessage = (e) => {
+          const msg = JSON.parse(e.data);
+          handleEvent(msg);
+        };
+      }
+
+      function handleEvent(msg) {
+        if (msg.type === "hapticnet_rx") {
+          stats.h.rx++;
+          stats.h.rateN++;
+          if (msg.source === "dead_reckoned") stats.h.dr++;
+          if (msg.latency_ms > 0) {
+            stats.h.latSum += msg.latency_ms;
+            stats.h.latN++;
+          }
+          appendLog("H", msg);
+          updateCanvas("h", msg);
+        } else if (msg.type === "grpc_rx") {
+          stats.g.rx++;
+          stats.g.rateN++;
+          if (msg.latency_ms > 0) {
+            stats.g.latSum += msg.latency_ms;
+            stats.g.latN++;
+          }
+          appendLog("G", msg);
+          updateCanvas("g", msg);
+        } else if (msg.type === "client_done") {
+          const proto = msg.protocol;
+          if (proto === "hapticnet") {
+            document.getElementById("btnHStart").disabled = false;
+            document.getElementById("btnHStop").disabled = true;
+          } else {
+            document.getElementById("btnGStart").disabled = false;
+            document.getElementById("btnGStop").disabled = true;
+          }
+        }
+      }
+
+      function appendLog(proto, msg) {
+        const body = document.getElementById("logBody");
+        const isAtBottom =
+          body.scrollHeight - body.clientHeight <= body.scrollTop + 40;
+
+        const row = document.createElement("div");
+        row.className = "log-row";
+        const protoTag =
+          proto === "H"
+            ? '<span class="tag tag-h">HAPTIC</span>'
+            : '<span class="tag tag-g">GRPC</span>';
+        const srcTag =
+          msg.source === "dead_reckoned"
+            ? '<span class="tag tag-dr">DR</span>'
+            : '<span class="tag tag-real">REAL</span>';
+        const lat =
+          msg.latency_ms > 0 ? msg.latency_ms.toFixed(2) + " ms" : "—";
+        const pos = msg.pos || [0, 0, 0];
+
+        row.innerHTML = `
+    <span>${protoTag}</span>
+    <span>${msg.seq}</span>
+    <span>${pos[0].toFixed(3)}</span>
+    <span>${pos[1].toFixed(3)}</span>
+    <span>${(msg.force || 0).toFixed(2)}</span>
+    <span>${lat}</span>
+    <span>${srcTag}</span>
+  `;
+        body.prepend(row);
+
+        // trim old rows
+        while (body.children.length > MAX_LOG_ROWS) body.lastChild.remove();
+      }
+
+      // ── Tab switching ─────────────────────────────────────────────────────────
+      function switchTab(proto) {
+        document.getElementById("panelHapticnet").style.display =
+          proto === "hapticnet" ? "" : "none";
+        document.getElementById("panelGrpc").style.display =
+          proto === "grpc" ? "" : "none";
+        document
+          .getElementById("tabH")
+          .classList.toggle("active", proto === "hapticnet");
+        document
+          .getElementById("tabG")
+          .classList.toggle("active", proto === "grpc");
+      }
+
+      // ── Client control ────────────────────────────────────────────────────────
+      async function startClient(proto) {
+        if (proto === "hapticnet") {
+          const body = {
+            host: document.getElementById("h_host").value,
+            port: +document.getElementById("h_port").value,
+            rate_hz: +document.getElementById("h_rate").value,
+            samples: +document.getElementById("h_samples").value,
+          };
+          await fetch("/api/hapticnet/start-client", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          document.getElementById("btnHStart").disabled = true;
+          document.getElementById("btnHStop").disabled = false;
+        } else {
+          const body = {
+            host: document.getElementById("g_host").value,
+            port: +document.getElementById("g_port").value,
+            rate_hz: +document.getElementById("g_rate").value,
+            samples: +document.getElementById("g_samples").value,
+          };
+          await fetch("/api/grpc/start-client", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          document.getElementById("btnGStart").disabled = true;
+          document.getElementById("btnGStop").disabled = false;
+        }
+      }
+
+      async function stopClient(proto) {
+        await fetch(`/api/${proto}/stop-client`, { method: "POST" });
+        if (proto === "hapticnet") {
+          document.getElementById("btnHStart").disabled = false;
+          document.getElementById("btnHStop").disabled = true;
+        } else {
+          document.getElementById("btnGStart").disabled = false;
+          document.getElementById("btnGStop").disabled = true;
+        }
+      }
+
+      // ── Packet loss ───────────────────────────────────────────────────────────
+      function updateLossLabel(id) {
+        const val = document.getElementById("loss" + id).value;
+        document.getElementById("loss" + id + "Val").textContent = val + "%";
+      }
+
+      async function applyLoss(proto) {
+        const id = proto === "hapticnet" ? "H" : "G";
+        const rate = +document.getElementById("loss" + id).value / 100;
+        await fetch(`/api/${proto}/packet-loss`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rate }),
+        });
+      }
+
+      // ── Position / Force Canvas ───────────────────────────────────────────
+      const canvases = {
+        h: { el: null, ctx: null, prev: null, bounds: null },
+        g: { el: null, ctx: null, prev: null, bounds: null },
+      };
+
+      // Rolling bounds for auto-scaling (min/max of x and y seen so far)
+      function makeBounds() {
+        return {
+          xMin: Infinity,
+          xMax: -Infinity,
+          yMin: Infinity,
+          yMax: -Infinity,
+        };
+      }
+
+      function initCanvas(key, id) {
+        const el = document.getElementById(id);
+        const wrap = el.parentElement;
+        // Set physical pixel size
+        const dpr = window.devicePixelRatio || 1;
+        el.width = wrap.clientWidth * dpr;
+        el.height = wrap.clientHeight * dpr;
+        const ctx = el.getContext("2d");
+        ctx.scale(dpr, dpr);
+        canvases[key].el = el;
+        canvases[key].ctx = ctx;
+        canvases[key].prev = null;
+        canvases[key].bounds = makeBounds();
+        redrawGrid(key);
+      }
+
+      function clearCanvas(key) {
+        const c = canvases[key];
+        if (!c.ctx) return;
+        c.prev = null;
+        c.bounds = makeBounds();
+        const w = c.el.width / (window.devicePixelRatio || 1);
+        const h = c.el.height / (window.devicePixelRatio || 1);
+        c.ctx.clearRect(0, 0, w, h);
+        redrawGrid(key);
+      }
+
+      function redrawGrid(key) {
+        const c = canvases[key];
+        if (!c.ctx) return;
+        const dpr = window.devicePixelRatio || 1;
+        const W = c.el.width / dpr;
+        const H = c.el.height / dpr;
+        // Faint grid
+        c.ctx.save();
+        c.ctx.strokeStyle = "rgba(255,255,255,0.05)";
+        c.ctx.lineWidth = 1;
+        const steps = 5;
+        for (let i = 0; i <= steps; i++) {
+          const x = (W / steps) * i;
+          c.ctx.beginPath();
+          c.ctx.moveTo(x, 0);
+          c.ctx.lineTo(x, H);
+          c.ctx.stroke();
+          const y = (H / steps) * i;
+          c.ctx.beginPath();
+          c.ctx.moveTo(0, y);
+          c.ctx.lineTo(W, y);
+          c.ctx.stroke();
+        }
+        // Axis labels (centre)
+        c.ctx.fillStyle = "rgba(107,115,148,0.5)";
+        c.ctx.font = "9px Inter, sans-serif";
+        c.ctx.fillText("X →", W - 20, H - 4);
+        c.ctx.fillText("Y ↑", 4, 12);
+        c.ctx.restore();
+      }
+
+      // Map a data value to canvas pixels given the current bounds
+      function dataToCanvas(val, vMin, vMax, pxMin, pxMax) {
+        if (vMax === vMin) return (pxMin + pxMax) / 2;
+        return pxMin + ((val - vMin) / (vMax - vMin)) * (pxMax - pxMin);
+      }
+
+      const CANVAS_PAD = 16; // pixels
+
+      function plotPoint(key, x, y, force, color) {
+        const c = canvases[key];
+        if (!c.ctx) return;
+        // Expand bounds
+        const b = c.bounds;
+        b.xMin = Math.min(b.xMin, x);
+        b.xMax = Math.max(b.xMax, x);
+        b.yMin = Math.min(b.yMin, y);
+        b.yMax = Math.max(b.yMax, y);
+        const dpr = window.devicePixelRatio || 1;
+        const W = c.el.width / dpr;
+        const H = c.el.height / dpr;
+        // Add a little padding so points don't sit on the edge
+        const pad = CANVAS_PAD;
+        const px = dataToCanvas(x, b.xMin, b.xMax, pad, W - pad);
+        const py = dataToCanvas(y, b.yMin, b.yMax, H - pad, pad); // flip Y
+
+        const lw = Math.max(1, Math.min(6, Math.abs(force) * 10 + 1));
+        c.ctx.strokeStyle = color;
+        c.ctx.lineWidth = lw;
+        c.ctx.lineCap = "round";
+        c.ctx.lineJoin = "round";
+
+        if (c.prev) {
+          c.ctx.beginPath();
+          c.ctx.moveTo(c.prev.px, c.prev.py);
+          c.ctx.lineTo(px, py);
+          c.ctx.stroke();
+        } else {
+          // Draw a dot for the first point
+          c.ctx.fillStyle = color;
+          c.ctx.beginPath();
+          c.ctx.arc(px, py, lw, 0, Math.PI * 2);
+          c.ctx.fill();
+        }
+        c.prev = { px, py };
+      }
+
+      // Call this after every packet event
+      function updateCanvas(proto, msg) {
+        const key = proto;
+        const pos = msg.pos || [0, 0, 0];
+        const x = pos[0],
+          y = pos[1];
+        const force = msg.force || 0;
+        let color;
+        if (proto === "h") {
+          color = msg.source === "dead_reckoned" ? "#f5a623" : "#6c8ef7";
+        } else {
+          color = "#3ecf8e";
+        }
+        plotPoint(key, x, y, force, color);
+      }
+
+      // ── Boot ──────────────────────────────────────────────────────────────
+      connectWS();
+      // Init canvases after DOM is ready
+      window.addEventListener("load", () => {
+        initCanvas("h", "posCanvasH");
+        initCanvas("g", "posCanvasG");
+      });
+    </script>
+  </body>
+</html>

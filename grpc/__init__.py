@@ -1,2 +1,1 @@
 """Project-local gRPC package."""
-
