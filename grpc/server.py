@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import argparse
-import socket
 import sys
 import threading
 import time
 from concurrent import futures
-from dataclasses import dataclass
 from pathlib import Path
 
 import grpc
@@ -17,9 +14,8 @@ if str(CURRENT_DIR) not in sys.path:
 
 import helloworld_pb2
 import helloworld_pb2_grpc
-
-DISCOVERY_REQUEST = b"NETWORKYEE_GRPC_DISCOVER_V1"
-
+from .models import StreamStats
+from .discovery import _discovery_server
 
 class Greeter(helloworld_pb2_grpc.GreeterServicer):
     def SayHello(self, request, context):
@@ -28,59 +24,6 @@ class Greeter(helloworld_pb2_grpc.GreeterServicer):
         latency_ms = (time.perf_counter() - started_at) * 1000.0
         print(f"SayHello peer={context.peer()} name={request.name!r} latency_ms={latency_ms:.3f}")
         return reply
-
-
-@dataclass(slots=True)
-class StreamStats:
-    received_packets: int = 0
-    latency_sum_ms: float = 0.0
-    latency_samples: int = 0
-    latency_min_ms: float = float("inf")
-    latency_max_ms: float = 0.0
-    window_packets: int = 0
-    window_latency_sum_ms: float = 0.0
-    window_latency_samples: int = 0
-    window_latency_min_ms: float = float("inf")
-    window_latency_max_ms: float = 0.0
-    last_report_at: float = 0.0
-
-    def add_latency(self, latency_ms: float) -> None:
-        self.latency_sum_ms += latency_ms
-        self.latency_samples += 1
-        self.latency_min_ms = min(self.latency_min_ms, latency_ms)
-        self.latency_max_ms = max(self.latency_max_ms, latency_ms)
-        self.window_latency_sum_ms += latency_ms
-        self.window_latency_samples += 1
-        self.window_latency_min_ms = min(self.window_latency_min_ms, latency_ms)
-        self.window_latency_max_ms = max(self.window_latency_max_ms, latency_ms)
-
-    def report_if_due(self) -> None:
-        now = time.perf_counter()
-        if self.last_report_at == 0.0:
-            self.last_report_at = now
-            return
-
-        elapsed = now - self.last_report_at
-        if elapsed < 1.0:
-            return
-
-        rx_rate = self.window_packets / elapsed
-        if self.window_latency_samples > 0:
-            lat_avg = self.window_latency_sum_ms / self.window_latency_samples
-            lat_min = self.window_latency_min_ms
-            lat_max = self.window_latency_max_ms
-            lat_text = f"lat(avg/min/max)={lat_avg:.2f}/{lat_min:.2f}/{lat_max:.2f} ms"
-        else:
-            lat_text = "lat(avg/min/max)=n/a"
-
-        print(f"grpc stats rx={self.window_packets} rx_rate={rx_rate:.1f} pkt/s {lat_text}")
-        self.window_packets = 0
-        self.window_latency_sum_ms = 0.0
-        self.window_latency_samples = 0
-        self.window_latency_min_ms = float("inf")
-        self.window_latency_max_ms = 0.0
-        self.last_report_at = now
-
 
 class HapticBridge(helloworld_pb2_grpc.HapticBridgeServicer):
     def StreamHaptics(self, request_iterator, context):
@@ -128,28 +71,7 @@ class HapticBridge(helloworld_pb2_grpc.HapticBridgeServicer):
         )
 
 
-def _discovery_server(grpc_port: int, discovery_port: int, stop_event: threading.Event) -> None:
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind(("0.0.0.0", discovery_port))
-        sock.settimeout(0.5)
-        print(f"Discovery listener started on 0.0.0.0:{discovery_port} -> grpc port {grpc_port}")
-        while not stop_event.is_set():
-            try:
-                payload, addr = sock.recvfrom(1024)
-            except socket.timeout:
-                continue
-            except OSError:
-                break
-
-            if payload != DISCOVERY_REQUEST:
-                continue
-
-            response = f"NETWORKYEE_GRPC_HERE {grpc_port}".encode("utf-8")
-            sock.sendto(response, addr)
-
-
-def serve(
+def run_server(
     host: str = "0.0.0.0",
     port: int = 50051,
     enable_discovery: bool = True,
@@ -177,18 +99,3 @@ def serve(
         stop_event.set()
         if discovery_thread is not None:
             discovery_thread.join(timeout=1.0)
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run gRPC Greeter server")
-    parser.add_argument("--host", default="0.0.0.0")
-    parser.add_argument("--port", type=int, default=50051)
-    parser.add_argument("--discovery-port", type=int, default=50052)
-    parser.add_argument("--disable-discovery", action="store_true")
-    args = parser.parse_args()
-    serve(
-        host=args.host,
-        port=args.port,
-        enable_discovery=not args.disable_discovery,
-        discovery_port=args.discovery_port,
-    )

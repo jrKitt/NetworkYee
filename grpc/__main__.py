@@ -2,18 +2,14 @@ from __future__ import annotations
 
 import argparse
 import subprocess
-import sys
 from pathlib import Path
+
+from .client import run_client
+from .server import run_server
+from .discovery import discover_server
 
 
 BASE_DIR = Path(__file__).resolve().parent
-
-
-def _run_script(script_name: str, args: list[str]) -> int:
-    command = [sys.executable, str(BASE_DIR / script_name), *args]
-    completed = subprocess.run(command, check=False)
-    return completed.returncode
-
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run HapticNet gRPC utilities")
@@ -22,6 +18,8 @@ def build_parser() -> argparse.ArgumentParser:
     server_parser = subparsers.add_parser("server", help="Run gRPC server")
     server_parser.add_argument("--host", default="0.0.0.0")
     server_parser.add_argument("--port", type=int, default=50051)
+    server_parser.add_argument("--discovery-port", type=int, default=50052)
+    server_parser.add_argument("--disable-discovery", action="store_true")
 
     client_parser = subparsers.add_parser("client", help="Run gRPC client")
     client_parser.add_argument("--host", default="127.0.0.1")
@@ -33,51 +31,49 @@ def build_parser() -> argparse.ArgumentParser:
     client_parser.add_argument("--discovery-port", type=int, default=50052)
     client_parser.add_argument("--broadcast-ip", default="255.255.255.255")
 
-    server_parser.add_argument("--discovery-port", type=int, default=50052)
-    server_parser.add_argument("--disable-discovery", action="store_true")
+    discover_parser = subparsers.add_parser("discover", help="Discover gRPC server over UDP broadcast")
+    discover_parser.add_argument("--discovery-port", type=int, default=50052)
+    discover_parser.add_argument("--timeout", type=float, default=3.0)
+    discover_parser.add_argument("--broadcast-ip", default="255.255.255.255")
 
     subparsers.add_parser("gen-proto", help="Generate protobuf Python files")
     return parser
-
 
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
 
     if args.command == "server":
-        server_args = ["--host", args.host, "--port", str(args.port), "--discovery-port", str(args.discovery_port)]
-        if args.disable_discovery:
-            server_args.append("--disable-discovery")
-        exit_code = _run_script("server.py", server_args)
+        run_server(
+            host=args.host,
+            port=args.port,
+            enable_discovery=not args.disable_discovery,
+            discovery_port=args.discovery_port,
+        )
     elif args.command == "client":
-        client_args = [
-            "--host",
-            args.host,
-            "--port",
-            str(args.port),
-            "--timeout",
-            str(args.timeout),
-            "--rate",
-            str(args.rate),
-            "--samples",
-            str(args.samples),
-            "--discovery-port",
-            str(args.discovery_port),
-            "--broadcast-ip",
-            args.broadcast_ip,
-        ]
-        if args.discover:
-            client_args.append("--discover")
-        exit_code = _run_script("client.py", client_args)
+        run_client(
+            host=args.host,
+            port=args.port,
+            timeout=args.timeout,
+            rate_hz=args.rate,
+            samples=args.samples,
+            discover=args.discover,
+            discovery_port=args.discovery_port,
+            broadcast_ip=args.broadcast_ip,
+        )
+    elif args.command == "discover":
+        target = discover_server(
+            discovery_port=args.discovery_port,
+            timeout=args.timeout,
+            broadcast_ip=args.broadcast_ip,
+        )
+        print(f"Discovered grpc server at {target}")
     elif args.command == "gen-proto":
         command = ["bash", str(BASE_DIR / "gen_proto.sh")]
         exit_code = subprocess.run(command, check=False).returncode
+        raise SystemExit(exit_code)
     else:
         parser.error(f"Unknown command: {args.command}")
-        return
-
-    raise SystemExit(exit_code)
-
 
 if __name__ == "__main__":
     main()
