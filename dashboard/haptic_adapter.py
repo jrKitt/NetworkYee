@@ -20,7 +20,7 @@ class HapticAdapter:
         self,
         bind_host: str = "0.0.0.0",
         port: int = 9000,
-        buffer_size: int = 3,
+        buffer_size: int = 1,
         discovery_port: int = 9001,
         event_queue: Optional[asyncio.Queue] = None,
         loop: Optional[asyncio.AbstractEventLoop] = None,

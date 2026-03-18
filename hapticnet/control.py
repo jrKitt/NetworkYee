@@ -93,6 +93,23 @@ def _discovery_server(port: int, discovery_port: int, stop_event: threading.Even
             sock.sendto(response, addr)
 
 
+def _configure_udp_socket_low_latency(sock: socket.socket, *, sender: bool) -> None:
+    # Best-effort socket tuning for lower queueing delay on LAN/Wi-Fi.
+    try:
+        # DSCP EF (46) << 2 = 184 (0xB8)
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_TOS, 0xB8)
+    except OSError:
+        pass
+
+    try:
+        if sender:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 32 * 1024)
+        else:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 64 * 1024)
+    except OSError:
+        pass
+
+
 # ---------------------------------------------------------------------------
 # Sender / Client
 # ---------------------------------------------------------------------------
@@ -111,13 +128,15 @@ def run_sender(
     started_at = time.perf_counter()
 
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        _configure_udp_socket_low_latency(sock, sender=True)
+        sock.connect((host, port))
         print(f"hapticnet client sending to {host}:{port} rate={rate_hz}Hz samples={samples}")
         next_deadline = time.perf_counter()
         while (samples <= 0 or sent_packets < samples):
             if stop_event is not None and stop_event.is_set():
                 break
             packet = simulator.next_packet()
-            sock.sendto(packet.to_bytes(), (host, port))
+            sock.send(packet.to_bytes())
             sent_packets += 1
             next_deadline += interval
             sleep_for = next_deadline - time.perf_counter()
@@ -133,11 +152,11 @@ def run_sender(
                 force=0.0, texture_id=-1,
             )
             for _ in range(3):
-                sock.sendto(end_marker.to_bytes(), (host, port))
+                sock.send(end_marker.to_bytes())
                 time.sleep(0.002)
             sock.settimeout(2.0)
             try:
-                payload, _ = sock.recvfrom(1024)
+                payload = sock.recv(1024)
                 message = payload.decode("utf-8", errors="strict")
                 prefix = SUMMARY_RESPONSE_PREFIX
                 if message.startswith(prefix):
@@ -207,6 +226,8 @@ def run_receiver(
     packet_loss_rate: float = 0.0,
     on_packet: Optional[Callable[[dict], None]] = None,
     enable_dead_reckoning: bool = False,
+    recv_timeout_s: float = 0.001,
+    reorder_wait_s: float = 0.002,
 ) -> None:
     """
     Receive haptic packets and process them through the jitter buffer +
@@ -235,8 +256,7 @@ def run_receiver(
     expected_seq = 1
     initialized_expected_seq = False
     missing_since = 0.0
-    # Keep the missing wait short so DR can kick in close to sender cadence.
-    missing_wait_s = 0.01
+    missing_wait_s = max(0.0, reorder_wait_s)
     last_rx_at = 0.0
     dr_max_gap_s = 0.08
     last_dr_at = 0.0
@@ -265,8 +285,9 @@ def run_receiver(
 
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            _configure_udp_socket_low_latency(sock, sender=False)
             sock.bind((bind_host, port))
-            sock.settimeout(0.005)
+            sock.settimeout(max(0.0005, recv_timeout_s))
             print(f"hapticnet server started on {bind_host}:{port} jitter_buffer={buffer_size}")
 
             while not _stop.is_set():
@@ -377,6 +398,16 @@ def run_receiver(
 
                 head_seq = jitter_buffer.peek_sequence()
                 now = time.perf_counter()
+
+                # In low-latency mode (no DR), skip missing packets immediately.
+                if not enable_dead_reckoning:
+                    if head_seq is not None and head_seq > expected_seq:
+                        stats.dropped_packets += (head_seq - expected_seq)
+                        expected_seq = head_seq
+                        missing_since = 0.0
+                    stats.report(expected_seq)
+                    continue
+
                 if head_seq is not None and head_seq > expected_seq:
                     if missing_since == 0.0:
                         missing_since = now
@@ -387,14 +418,6 @@ def run_receiver(
                     missing_since = 0.0
 
                 if (time.perf_counter() - last_rx_at) > dr_max_gap_s:
-                    stats.report(expected_seq)
-                    continue
-
-                if not enable_dead_reckoning:
-                    if head_seq is not None and head_seq > expected_seq:
-                        stats.dropped_packets += (head_seq - expected_seq)
-                        expected_seq = head_seq
-                        missing_since = 0.0
                     stats.report(expected_seq)
                     continue
 

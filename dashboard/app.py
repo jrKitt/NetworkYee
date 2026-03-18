@@ -68,7 +68,7 @@ async def startup() -> None:
     haptic_adapter = HapticAdapter(
         bind_host="0.0.0.0",
         port=9000,
-        buffer_size=3,
+        buffer_size=1,
         discovery_port=9001,
         event_queue=_event_queue,
         loop=_loop,

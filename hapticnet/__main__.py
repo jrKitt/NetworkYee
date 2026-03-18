@@ -243,6 +243,22 @@ def run_simulation(sample_count: int) -> None:
 		time.sleep(0.01)
 
 
+def _configure_udp_socket_low_latency(sock: socket.socket, sender: bool) -> None:
+	try:
+		# DSCP EF (46) << 2 = 184 (0xB8)
+		sock.setsockopt(socket.IPPROTO_IP, socket.IP_TOS, 0xB8)
+	except OSError:
+		pass
+
+	try:
+		if sender:
+			sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 32 * 1024)
+		else:
+			sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 64 * 1024)
+	except OSError:
+		pass
+
+
 def run_sender(host: str, port: int, rate_hz: int, samples: int = 1000) -> None:
 	simulator = HapticSimulator()
 	interval = 1.0 / rate_hz
@@ -250,10 +266,12 @@ def run_sender(host: str, port: int, rate_hz: int, samples: int = 1000) -> None:
 	started_at = time.perf_counter()
 
 	with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+		_configure_udp_socket_low_latency(sock, sender=True)
+		sock.connect((host, port))
 		print(f"hapticnet client sending to {host}:{port} rate={rate_hz}Hz samples={samples}")
 		while samples <= 0 or sent_packets < samples:
 			packet = simulator.next_packet()
-			sock.sendto(packet.to_bytes(), (host, port))
+			sock.send(packet.to_bytes())
 			sent_packets += 1
 			time.sleep(interval)
 
@@ -272,11 +290,11 @@ def run_sender(host: str, port: int, rate_hz: int, samples: int = 1000) -> None:
 				texture_id=-1,
 			)
 			for _ in range(3):
-				sock.sendto(end_marker.to_bytes(), (host, port))
+				sock.send(end_marker.to_bytes())
 				time.sleep(0.002)
 			sock.settimeout(2.0)
 			try:
-				payload, _ = sock.recvfrom(1024)
+				payload = sock.recv(1024)
 				message = payload.decode("utf-8", errors="strict")
 				prefix = SUMMARY_RESPONSE_PREFIX
 				if message.startswith(prefix):
@@ -386,6 +404,7 @@ def run_receiver(
 
 	try:
 		with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+			_configure_udp_socket_low_latency(sock, sender=False)
 			sock.bind((bind_host, port))
 			sock.settimeout(0.005)
 			print(f"hapticnet server started on {bind_host}:{port} jitter_buffer={buffer_size}")
