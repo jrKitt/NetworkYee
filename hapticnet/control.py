@@ -301,11 +301,27 @@ def run_receiver(
                     if len(payload) != PAYLOAD_SIZE:
                         continue
 
+                    seq = _read_sequence(payload)
+
                     # ---- artificial packet loss injection ----
                     if _loss[0] > 0.0 and random.random() < _loss[0]:
+                        if on_packet is not None:
+                            try:
+                                dropped_packet = HapticPacket.from_bytes(payload)
+                                on_packet({
+                                    "seq": seq,
+                                    "pos": [
+                                        round(dropped_packet.pos_x, 4),
+                                        round(dropped_packet.pos_y, 4),
+                                        round(dropped_packet.pos_z, 4),
+                                    ],
+                                    "force": round(dropped_packet.force, 4),
+                                    "latency_ms": 0.0,
+                                    "source": "dropped",
+                                })
+                            except ValueError:
+                                pass
                         continue  # drop for DR testing
-
-                    seq = _read_sequence(payload)
                     last_rx_at = time.perf_counter()
 
                     # end-of-stream marker

@@ -32,6 +32,7 @@
         --muted: #6b7394;
         --tag-real: rgba(62, 207, 142, 0.15);
         --tag-dr: rgba(245, 166, 35, 0.15);
+        --tag-loss: rgba(224, 92, 92, 0.2);
       }
 
       html,
@@ -440,6 +441,10 @@
         background: var(--tag-dr);
         color: var(--accent-dr);
       }
+      .tag-loss {
+        background: var(--tag-loss);
+        color: var(--accent-red);
+      }
 
       /* ── Position Canvas Panel ────────────────────────────── */
       .canvas-row {
@@ -722,6 +727,9 @@
               <div>
                 <span class="tag tag-dr">DR</span> &nbsp; Dead Reckoned estimate
               </div>
+              <div>
+                <span class="tag tag-loss">LOSS</span> &nbsp; Simulated dropped packet
+              </div>
             </div>
           </div>
         </aside>
@@ -846,7 +854,7 @@
 
       // Counters
       const stats = {
-        h: { rx: 0, dr: 0, latSum: 0, latN: 0, rateN: 0 },
+        h: { rx: 0, dr: 0, drop: 0, latSum: 0, latN: 0, rateN: 0 },
         g: { rx: 0, drop: 0, latSum: 0, latN: 0, rateN: 0 },
       };
 
@@ -984,12 +992,16 @@
 
       function handleEvent(msg) {
         if (msg.type === "hapticnet_rx") {
-          stats.h.rx++;
-          stats.h.rateN++;
-          if (msg.source === "dead_reckoned") stats.h.dr++;
-          if (msg.latency_ms > 0) {
-            stats.h.latSum += msg.latency_ms;
-            stats.h.latN++;
+          if (msg.source === "dropped") {
+            stats.h.drop++;
+          } else {
+            stats.h.rx++;
+            stats.h.rateN++;
+            if (msg.source === "dead_reckoned") stats.h.dr++;
+            if (msg.latency_ms > 0) {
+              stats.h.latSum += msg.latency_ms;
+              stats.h.latN++;
+            }
           }
           appendLog("H", msg);
           updateCanvas("h", msg);
@@ -1026,6 +1038,9 @@
             ? '<span class="tag tag-h">HAPTIC</span>'
             : '<span class="tag tag-g">GRPC</span>';
         const srcTag =
+          msg.source === "dropped"
+            ? '<span class="tag tag-loss">LOSS</span>'
+            :
           msg.source === "dead_reckoned"
             ? '<span class="tag tag-dr">DR</span>'
             : '<span class="tag tag-real">REAL</span>';
@@ -1204,7 +1219,7 @@
 
       const CANVAS_PAD = 16; // pixels
 
-      function plotPoint(key, x, y, force, color) {
+      function plotPoint(key, x, y, force, color, isLoss = false) {
         const c = canvases[key];
         if (!c.ctx) return;
         // Expand bounds
@@ -1226,6 +1241,7 @@
         c.ctx.lineWidth = lw;
         c.ctx.lineCap = "round";
         c.ctx.lineJoin = "round";
+        c.ctx.setLineDash(isLoss ? [6, 4] : []);
 
         if (c.prev) {
           c.ctx.beginPath();
@@ -1240,6 +1256,7 @@
           c.ctx.fill();
         }
         c.prev = { px, py };
+        c.ctx.setLineDash([]);
       }
 
       // Call this after every packet event
@@ -1250,12 +1267,18 @@
           y = pos[1];
         const force = msg.force || 0;
         let color;
+        let isLoss = false;
         if (proto === "h") {
-          color = msg.source === "dead_reckoned" ? "#f5a623" : "#6c8ef7";
+          if (msg.source === "dropped") {
+            color = "#e05c5c";
+            isLoss = true;
+          } else {
+            color = msg.source === "dead_reckoned" ? "#f5a623" : "#6c8ef7";
+          }
         } else {
           color = "#3ecf8e";
         }
-        plotPoint(key, x, y, force, color);
+        plotPoint(key, x, y, force, color, isLoss);
       }
 
       // ── Boot ──────────────────────────────────────────────────────────────
