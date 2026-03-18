@@ -8,9 +8,11 @@ through the single /ws WebSocket channel.
 from __future__ import annotations
 
 import asyncio
+import socket
 import threading
+import time
 from pathlib import Path
-from typing import Any, Optional, Set
+from typing import Any, Literal, Optional, Set
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -20,6 +22,7 @@ from pydantic import BaseModel
 
 from .haptic_adapter import HapticAdapter
 from .grpc_adapter import GrpcAdapter
+from . import grpc_adapter as dashboard_grpc_adapter
 
 # ---------------------------------------------------------------------------
 # State
@@ -43,6 +46,14 @@ _haptic_client_thread: Optional[threading.Thread] = None
 _haptic_client_stop: Optional[threading.Event] = None
 _grpc_client_thread: Optional[threading.Thread] = None
 _grpc_client_stop: Optional[threading.Event] = None
+
+# Web simulator sender state
+_sim_lock = threading.Lock()
+_sim_haptic_seq = 0
+_sim_grpc_seq = 0
+_sim_grpc_target: Optional[str] = None
+_sim_grpc_channel: Any = None
+_sim_grpc_stub: Any = None
 
 
 # ---------------------------------------------------------------------------
@@ -78,10 +89,16 @@ async def startup() -> None:
 
 @app.on_event("shutdown")
 async def shutdown() -> None:
+    global _sim_grpc_channel, _sim_grpc_stub, _sim_grpc_target
     if haptic_adapter:
         haptic_adapter.stop()
     if grpc_adapter:
         grpc_adapter.stop()
+    if _sim_grpc_channel is not None:
+        _sim_grpc_channel.close()
+        _sim_grpc_channel = None
+        _sim_grpc_stub = None
+        _sim_grpc_target = None
 
 
 # ---------------------------------------------------------------------------
@@ -275,6 +292,144 @@ async def grpc_set_loss(cfg: LossConfig) -> dict:
     if grpc_adapter:
         grpc_adapter.set_packet_loss_rate(cfg.rate)
     return {"status": "ok", "rate": cfg.rate}
+
+
+# ---------------------------------------------------------------------------
+# REST – Web simulator sender
+# ---------------------------------------------------------------------------
+
+class SimulateConfig(BaseModel):
+    target: Literal["hapticnet", "grpc", "both"] = "both"
+    payload_mode: Literal["position", "position_force", "full"] = "position_force"
+    haptic_host: str = "127.0.0.1"
+    haptic_port: int = 9000
+    grpc_host: str = "127.0.0.1"
+    grpc_port: int = 50051
+    pos_x: float = 0.0
+    pos_y: float = 0.0
+    pos_z: float = 0.0
+    force: float = 0.3
+    texture_id: int = 1
+
+
+def _sim_payload(mode: str, cfg: SimulateConfig) -> dict[str, float | int]:
+    if mode == "position":
+        return {
+            "pos_x": cfg.pos_x,
+            "pos_y": cfg.pos_y,
+            "pos_z": cfg.pos_z,
+            "rot_w": 1.0,
+            "rot_x": 0.0,
+            "rot_y": 0.0,
+            "rot_z": 0.0,
+            "force": 0.0,
+            "texture_id": 0,
+        }
+    if mode == "position_force":
+        return {
+            "pos_x": cfg.pos_x,
+            "pos_y": cfg.pos_y,
+            "pos_z": cfg.pos_z,
+            "rot_w": 1.0,
+            "rot_x": 0.0,
+            "rot_y": 0.0,
+            "rot_z": 0.0,
+            "force": cfg.force,
+            "texture_id": 1,
+        }
+    return {
+        "pos_x": cfg.pos_x,
+        "pos_y": cfg.pos_y,
+        "pos_z": cfg.pos_z,
+        "rot_w": 1.0,
+        "rot_x": 0.0,
+        "rot_y": cfg.pos_x * 0.2,
+        "rot_z": cfg.pos_y * 0.2,
+        "force": cfg.force,
+        "texture_id": cfg.texture_id,
+    }
+
+
+def _next_seq(target: str) -> int:
+    global _sim_haptic_seq, _sim_grpc_seq
+    with _sim_lock:
+        if target == "hapticnet":
+            _sim_haptic_seq += 1
+            return _sim_haptic_seq
+        _sim_grpc_seq += 1
+        return _sim_grpc_seq
+
+
+def _send_haptic_frame(cfg: SimulateConfig, payload: dict[str, float | int]) -> int:
+    from hapticnet.models import HapticPacket
+
+    seq = _next_seq("hapticnet")
+    packet = HapticPacket(
+        sequence=seq,
+        timestamp_ns=time.time_ns(),
+        pos_x=float(payload["pos_x"]),
+        pos_y=float(payload["pos_y"]),
+        pos_z=float(payload["pos_z"]),
+        rot_w=float(payload["rot_w"]),
+        rot_x=float(payload["rot_x"]),
+        rot_y=float(payload["rot_y"]),
+        rot_z=float(payload["rot_z"]),
+        force=float(payload["force"]),
+        texture_id=int(payload["texture_id"]),
+    )
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.sendto(packet.to_bytes(), (cfg.haptic_host, cfg.haptic_port))
+    return seq
+
+
+def _grpc_stub(host: str, port: int) -> Any:
+    global _sim_grpc_target, _sim_grpc_channel, _sim_grpc_stub
+    target = f"{host}:{port}"
+    with _sim_lock:
+        if _sim_grpc_stub is not None and _sim_grpc_target == target:
+            return _sim_grpc_stub
+        if _sim_grpc_channel is not None:
+            _sim_grpc_channel.close()
+        _sim_grpc_channel = dashboard_grpc_adapter.grpc.insecure_channel(target)
+        dashboard_grpc_adapter.grpc.channel_ready_future(_sim_grpc_channel).result(timeout=2.0)
+        _sim_grpc_stub = dashboard_grpc_adapter.helloworld_pb2_grpc.HapticBridgeStub(_sim_grpc_channel)
+        _sim_grpc_target = target
+        return _sim_grpc_stub
+
+
+def _send_grpc_frame(cfg: SimulateConfig, payload: dict[str, float | int]) -> int:
+    seq = _next_seq("grpc")
+    frame = dashboard_grpc_adapter.helloworld_pb2.HapticFrame(
+        sequence=seq,
+        timestamp_ns=time.time_ns(),
+        pos_x=float(payload["pos_x"]),
+        pos_y=float(payload["pos_y"]),
+        pos_z=float(payload["pos_z"]),
+        rot_w=float(payload["rot_w"]),
+        rot_x=float(payload["rot_x"]),
+        rot_y=float(payload["rot_y"]),
+        rot_z=float(payload["rot_z"]),
+        force=float(payload["force"]),
+        texture_id=int(payload["texture_id"]),
+    )
+    stub = _grpc_stub(cfg.grpc_host, cfg.grpc_port)
+    stub.StreamHaptics(iter([frame]), timeout=2.0)
+    return seq
+
+
+@app.post("/api/simulate/send")
+async def simulate_send(cfg: SimulateConfig) -> dict:
+    payload = _sim_payload(cfg.payload_mode, cfg)
+    sent: list[dict[str, int]] = []
+
+    if cfg.target in ("hapticnet", "both"):
+        seq = await asyncio.to_thread(_send_haptic_frame, cfg, payload)
+        sent.append({"protocol": "hapticnet", "seq": seq})
+    if cfg.target in ("grpc", "both"):
+        seq = await asyncio.to_thread(_send_grpc_frame, cfg, payload)
+        sent.append({"protocol": "grpc", "seq": seq})
+
+    return {"status": "ok", "sent": sent}
 
 
 # ---------------------------------------------------------------------------

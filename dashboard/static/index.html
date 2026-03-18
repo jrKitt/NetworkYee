@@ -236,6 +236,88 @@
         cursor: not-allowed;
       }
 
+      /* Web simulator */
+      .sim-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .sim-grid .full {
+        grid-column: 1/-1;
+      }
+      select {
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--bg-base);
+        color: var(--text);
+        font-size: 13px;
+        font-family: "JetBrains Mono", monospace;
+        outline: none;
+      }
+      .sim-pad {
+        position: relative;
+        height: 170px;
+        margin-top: 12px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background:
+          radial-gradient(circle at 20% 20%, rgba(108, 142, 247, 0.12), transparent 45%),
+          radial-gradient(circle at 80% 80%, rgba(62, 207, 142, 0.1), transparent 40%),
+          var(--bg-base);
+        overflow: hidden;
+        cursor: crosshair;
+        touch-action: none;
+      }
+      .sim-pad::before,
+      .sim-pad::after {
+        content: "";
+        position: absolute;
+        background: rgba(255, 255, 255, 0.06);
+      }
+      .sim-pad::before {
+        left: 50%;
+        top: 0;
+        width: 1px;
+        height: 100%;
+        transform: translateX(-0.5px);
+      }
+      .sim-pad::after {
+        top: 50%;
+        left: 0;
+        width: 100%;
+        height: 1px;
+        transform: translateY(-0.5px);
+      }
+      .sim-cursor {
+        position: absolute;
+        width: 14px;
+        height: 14px;
+        margin: -7px 0 0 -7px;
+        border-radius: 50%;
+        border: 2px solid #fff;
+        background: rgba(108, 142, 247, 0.4);
+        box-shadow: 0 0 0 4px rgba(108, 142, 247, 0.15);
+        pointer-events: none;
+        left: 50%;
+        top: 50%;
+      }
+      .sim-meta {
+        margin-top: 10px;
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .sim-status {
+        margin-top: 8px;
+        min-height: 16px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+
       /* Packet loss */
       .loss-wrap {
         display: flex;
@@ -620,6 +702,65 @@
             </div>
           </div>
 
+          <!-- Web Simulator -->
+          <div class="section">
+            <div class="section-title">Web Sim Client (Mouse Drag)</div>
+            <div class="sim-grid">
+              <label class="full"
+                >Target
+                <select id="sim_target">
+                  <option value="both" selected>both (hapticnet + grpc)</option>
+                  <option value="hapticnet">hapticnet only</option>
+                  <option value="grpc">grpc only</option>
+                </select>
+              </label>
+              <label class="full"
+                >Payload Mode
+                <select id="sim_payload_mode">
+                  <option value="position">position only</option>
+                  <option value="position_force" selected>position + force</option>
+                  <option value="full">full (pos + force + texture + rot)</option>
+                </select>
+              </label>
+              <label
+                >Haptic Host
+                <input type="text" id="sim_h_host" value="127.0.0.1" />
+              </label>
+              <label
+                >Haptic Port
+                <input type="number" id="sim_h_port" value="9000" />
+              </label>
+              <label
+                >gRPC Host
+                <input type="text" id="sim_g_host" value="127.0.0.1" />
+              </label>
+              <label
+                >gRPC Port
+                <input type="number" id="sim_g_port" value="50051" />
+              </label>
+              <label
+                >Z Axis
+                <input type="number" id="sim_z" value="0" step="0.05" min="-1" max="1" />
+              </label>
+              <label
+                >Force
+                <input type="number" id="sim_force" value="0.35" step="0.05" min="0" max="1" />
+              </label>
+              <label class="full"
+                >Texture ID (full mode)
+                <input type="number" id="sim_texture" value="1" />
+              </label>
+            </div>
+            <div class="sim-pad" id="simPad">
+              <div class="sim-cursor" id="simCursor"></div>
+            </div>
+            <div class="sim-meta">
+              <span id="simPosText">x=0.000 y=0.000</span>
+              <span id="simSeqText">sent=0</span>
+            </div>
+            <div class="sim-status" id="simStatus">Drag inside pad to send frames</div>
+          </div>
+
           <!-- Packet Loss Injection -->
           <div class="section">
             <div class="section-title">🔴 Fake Packet Loss</div>
@@ -842,6 +983,13 @@
       const gLatData = Array(CHART_MAX).fill(null);
       const hRateData = Array(CHART_MAX).fill(null);
       const gRateData = Array(CHART_MAX).fill(null);
+      const SIM_SEND_INTERVAL_MS = 33;
+      const simState = {
+        dragging: false,
+        pointerId: null,
+        lastSentAt: 0,
+        sentCount: 0,
+      };
 
       function makeChart(id, datasets) {
         return new Chart(document.getElementById(id), {
@@ -1107,6 +1255,105 @@
         });
       }
 
+      // ── Mouse drag simulator ─────────────────────────────────────────────
+      function clamp(v, lo, hi) {
+        return Math.max(lo, Math.min(hi, v));
+      }
+
+      function updateSimCursor(px, py) {
+        const cursor = document.getElementById("simCursor");
+        cursor.style.left = `${px}px`;
+        cursor.style.top = `${py}px`;
+      }
+
+      function readSimConfig() {
+        return {
+          target: document.getElementById("sim_target").value,
+          payload_mode: document.getElementById("sim_payload_mode").value,
+          haptic_host: document.getElementById("sim_h_host").value,
+          haptic_port: +document.getElementById("sim_h_port").value,
+          grpc_host: document.getElementById("sim_g_host").value,
+          grpc_port: +document.getElementById("sim_g_port").value,
+          pos_z: +document.getElementById("sim_z").value,
+          force: +document.getElementById("sim_force").value,
+          texture_id: +document.getElementById("sim_texture").value,
+        };
+      }
+
+      async function sendSimFrame(posX, posY, forceSend = false) {
+        const now = performance.now();
+        if (!forceSend && now - simState.lastSentAt < SIM_SEND_INTERVAL_MS) {
+          return;
+        }
+        simState.lastSentAt = now;
+
+        const cfg = readSimConfig();
+        const body = {
+          ...cfg,
+          pos_x: posX,
+          pos_y: posY,
+        };
+
+        try {
+          const res = await fetch("/api/simulate/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          const data = await res.json();
+          simState.sentCount += (data.sent || []).length;
+          document.getElementById("simSeqText").textContent = `sent=${simState.sentCount}`;
+          document.getElementById("simStatus").textContent = `sent -> ${cfg.target}`;
+        } catch (err) {
+          document.getElementById("simStatus").textContent = "send failed (check backend host/port)";
+        }
+      }
+
+      function initSimPad() {
+        const pad = document.getElementById("simPad");
+
+        function moveToEvent(ev, sendNow) {
+          const rect = pad.getBoundingClientRect();
+          const px = clamp(ev.clientX - rect.left, 0, rect.width);
+          const py = clamp(ev.clientY - rect.top, 0, rect.height);
+          updateSimCursor(px, py);
+
+          const nx = (px / rect.width) * 2 - 1;
+          const ny = -((py / rect.height) * 2 - 1);
+          document.getElementById("simPosText").textContent = `x=${nx.toFixed(3)} y=${ny.toFixed(3)}`;
+          if (sendNow) {
+            sendSimFrame(nx, ny);
+          }
+        }
+
+        pad.addEventListener("pointerdown", (ev) => {
+          simState.dragging = true;
+          simState.pointerId = ev.pointerId;
+          pad.setPointerCapture(ev.pointerId);
+          moveToEvent(ev, true);
+          document.getElementById("simStatus").textContent = "dragging... sending frames";
+        });
+
+        pad.addEventListener("pointermove", (ev) => {
+          if (!simState.dragging || simState.pointerId !== ev.pointerId) {
+            return;
+          }
+          moveToEvent(ev, true);
+        });
+
+        function stopDrag(ev) {
+          if (simState.pointerId !== ev.pointerId) {
+            return;
+          }
+          simState.dragging = false;
+          simState.pointerId = null;
+          document.getElementById("simStatus").textContent = "idle";
+        }
+
+        pad.addEventListener("pointerup", stopDrag);
+        pad.addEventListener("pointercancel", stopDrag);
+      }
+
       // ── Position / Force Canvas ───────────────────────────────────────────
       const canvases = {
         h: { el: null, ctx: null, prev: null, bounds: null },
@@ -1249,6 +1496,7 @@
       window.addEventListener("load", () => {
         initCanvas("h", "posCanvasH");
         initCanvas("g", "posCanvasG");
+        initSimPad();
       });
     </script>
   </body>
