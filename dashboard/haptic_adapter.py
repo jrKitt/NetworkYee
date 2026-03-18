@@ -58,6 +58,10 @@ class HapticAdapter:
         setter = getattr(run_receiver, "_set_loss", None)
         if callable(setter):
             setter(self._packet_loss_rate)
+        # dead reckoning is useful only when packet loss is being simulated
+        dr_setter = getattr(run_receiver, "_set_dr_enabled", None)
+        if callable(dr_setter):
+            dr_setter(self._packet_loss_rate > 0.0)
 
     @property
     def is_running(self) -> bool:

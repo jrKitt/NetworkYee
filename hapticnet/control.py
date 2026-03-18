@@ -274,14 +274,19 @@ def run_receiver(
         )
         discovery_thread.start()
 
-    # Mutable reference so the loss rate can be changed from another thread
+    # Mutable references so runtime controls can be changed from another thread
     _loss = [max(0.0, min(1.0, packet_loss_rate))]
+    _dr_enabled = [enable_dead_reckoning]
 
     def _set_loss(rate: float) -> None:
         _loss[0] = max(0.0, min(1.0, rate))
 
-    # Attach setter as attribute so callers can hot-swap the loss rate
+    def _set_dr_enabled(enabled: bool) -> None:
+        _dr_enabled[0] = bool(enabled)
+
+    # Attach setters as attributes so callers can hot-swap runtime behavior
     run_receiver._set_loss = _set_loss  # type: ignore[attr-defined]
+    run_receiver._set_dr_enabled = _set_dr_enabled  # type: ignore[attr-defined]
 
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
@@ -400,7 +405,7 @@ def run_receiver(
                 now = time.perf_counter()
 
                 # In low-latency mode (no DR), skip missing packets immediately.
-                if not enable_dead_reckoning:
+                if not _dr_enabled[0]:
                     if head_seq is not None and head_seq > expected_seq:
                         stats.dropped_packets += (head_seq - expected_seq)
                         expected_seq = head_seq
