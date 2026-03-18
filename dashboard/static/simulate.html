@@ -198,6 +198,60 @@
         color: var(--danger);
       }
 
+      .loss-card {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 12px;
+        background: rgba(255, 255, 255, 0.01);
+      }
+
+      .loss-title {
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 600;
+        margin-bottom: 10px;
+      }
+
+      .loss-row {
+        display: grid;
+        grid-template-columns: 88px 1fr 42px auto;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .loss-row + .loss-row {
+        margin-top: 8px;
+      }
+
+      .loss-proto {
+        font-size: 11px;
+        color: var(--muted);
+        font-weight: 600;
+      }
+
+      .loss-val {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 12px;
+        text-align: right;
+        color: var(--danger);
+      }
+
+      .btn-apply {
+        padding: 7px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: var(--card2);
+        color: var(--text);
+        font-size: 11px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .btn-apply:hover {
+        border-color: var(--danger);
+        color: var(--danger);
+      }
+
       @media (max-width: 740px) {
         .page {
           padding: 12px;
@@ -271,6 +325,38 @@
               >Texture ID (full mode)
               <input type="number" id="sim_texture" value="1" />
             </label>
+          </div>
+
+          <div class="loss-card">
+            <div class="loss-title">Fake Packet Loss</div>
+            <div class="loss-row">
+              <span class="loss-proto">HapticNet</span>
+              <input
+                type="range"
+                min="0"
+                max="50"
+                value="0"
+                step="1"
+                id="lossH"
+                oninput="updateLossLabel('H')"
+              />
+              <span class="loss-val" id="lossHVal">0%</span>
+              <button class="btn-apply" onclick="applyLoss('hapticnet')">Apply</button>
+            </div>
+            <div class="loss-row">
+              <span class="loss-proto">gRPC</span>
+              <input
+                type="range"
+                min="0"
+                max="50"
+                value="0"
+                step="1"
+                id="lossG"
+                oninput="updateLossLabel('G')"
+              />
+              <span class="loss-val" id="lossGVal">0%</span>
+              <button class="btn-apply" onclick="applyLoss('grpc')">Apply</button>
+            </div>
           </div>
 
           <div class="pad" id="simPad">
@@ -354,6 +440,29 @@
           setStatus(`sending -> ${cfg.target}`);
         } catch (err) {
           setStatus("send failed (check backend host/port)", true);
+        }
+      }
+
+      function updateLossLabel(id) {
+        const val = document.getElementById("loss" + id).value;
+        document.getElementById("loss" + id + "Val").textContent = val + "%";
+      }
+
+      async function applyLoss(proto) {
+        const id = proto === "hapticnet" ? "H" : "G";
+        const rate = +document.getElementById("loss" + id).value / 100;
+        try {
+          const res = await fetch(`/api/${proto}/packet-loss`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ rate }),
+          });
+          if (!res.ok) {
+            throw new Error("request failed");
+          }
+          setStatus(`applied packet loss ${Math.round(rate * 100)}% -> ${proto}`);
+        } catch (err) {
+          setStatus("apply packet loss failed", true);
         }
       }
 
