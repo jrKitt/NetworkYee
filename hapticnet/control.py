@@ -206,6 +206,7 @@ def run_receiver(
     stop_event: Optional[threading.Event] = None,
     packet_loss_rate: float = 0.0,
     on_packet: Optional[Callable[[dict], None]] = None,
+    enable_dead_reckoning: bool = False,
 ) -> None:
     """
     Receive haptic packets and process them through the jitter buffer +
@@ -386,6 +387,14 @@ def run_receiver(
                     missing_since = 0.0
 
                 if (time.perf_counter() - last_rx_at) > dr_max_gap_s:
+                    stats.report(expected_seq)
+                    continue
+
+                if not enable_dead_reckoning:
+                    if head_seq is not None and head_seq > expected_seq:
+                        stats.dropped_packets += (head_seq - expected_seq)
+                        expected_seq = head_seq
+                        missing_since = 0.0
                     stats.report(expected_seq)
                     continue
 

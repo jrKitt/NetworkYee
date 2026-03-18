@@ -372,6 +372,7 @@ def run_receiver(
 	dr_max_gap_s = 0.08
 	last_dr_at = 0.0
 	dr_emit_interval_s = 0.01
+	enable_dead_reckoning = False
 	rx_log_every = 10
 	stop_event = threading.Event()
 	discovery_thread: Optional[threading.Thread] = None
@@ -494,6 +495,14 @@ def run_receiver(
 					missing_since = 0.0
 
 				if (time.perf_counter() - last_rx_at) > dr_max_gap_s:
+					stats.report(expected_seq)
+					continue
+
+				if not enable_dead_reckoning:
+					if head_seq is not None and head_seq > expected_seq:
+						stats.dropped_packets += (head_seq - expected_seq)
+						expected_seq = head_seq
+						missing_since = 0.0
 					stats.report(expected_seq)
 					continue
 
