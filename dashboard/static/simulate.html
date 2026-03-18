@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NetworkYee - Web Sim Client</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      :root {
+        --bg: #0d0f14;
+        --card: #151820;
+        --card2: #1c2030;
+        --line: #252a3a;
+        --text: #e1e4f0;
+        --muted: #6b7394;
+        --accent-h: #6c8ef7;
+        --accent-g: #3ecf8e;
+        --danger: #e05c5c;
+      }
+
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        font-family: "Inter", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .page {
+        min-height: 100%;
+        padding: 24px;
+        display: grid;
+        place-items: center;
+      }
+
+      .card {
+        width: min(920px, 100%);
+        border: 1px solid var(--line);
+        background: var(--card);
+        border-radius: 14px;
+        overflow: hidden;
+      }
+
+      .top {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--line);
+        background: linear-gradient(180deg, rgba(108, 142, 247, 0.08), transparent);
+      }
+
+      .title {
+        font-size: 16px;
+        font-weight: 700;
+      }
+
+      .sub {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .spacer {
+        margin-left: auto;
+      }
+
+      .link-btn {
+        padding: 7px 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        text-decoration: none;
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .link-btn:hover {
+        border-color: var(--accent-h);
+        color: var(--accent-h);
+      }
+
+      .content {
+        padding: 18px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .full {
+        grid-column: 1 / -1;
+      }
+
+      label {
+        font-size: 12px;
+        color: var(--muted);
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+
+      input,
+      select {
+        padding: 9px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: var(--bg);
+        color: var(--text);
+        font-size: 13px;
+        font-family: "JetBrains Mono", monospace;
+        outline: none;
+      }
+
+      input:focus,
+      select:focus {
+        border-color: var(--accent-h);
+      }
+
+      .pad {
+        position: relative;
+        height: 300px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background:
+          radial-gradient(circle at 18% 20%, rgba(108, 142, 247, 0.15), transparent 40%),
+          radial-gradient(circle at 80% 80%, rgba(62, 207, 142, 0.14), transparent 35%),
+          var(--bg);
+        overflow: hidden;
+        cursor: crosshair;
+        touch-action: none;
+      }
+
+      .pad::before,
+      .pad::after {
+        content: "";
+        position: absolute;
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .pad::before {
+        left: 50%;
+        top: 0;
+        width: 1px;
+        height: 100%;
+      }
+
+      .pad::after {
+        top: 50%;
+        left: 0;
+        width: 100%;
+        height: 1px;
+      }
+
+      .cursor {
+        position: absolute;
+        width: 14px;
+        height: 14px;
+        margin: -7px 0 0 -7px;
+        border-radius: 50%;
+        border: 2px solid #fff;
+        background: rgba(108, 142, 247, 0.45);
+        box-shadow: 0 0 0 4px rgba(108, 142, 247, 0.2);
+        pointer-events: none;
+        left: 50%;
+        top: 50%;
+      }
+
+      .meta {
+        display: flex;
+        justify-content: space-between;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .status {
+        font-size: 12px;
+        color: var(--muted);
+        min-height: 18px;
+      }
+
+      .status.error {
+        color: var(--danger);
+      }
+
+      @media (max-width: 740px) {
+        .page {
+          padding: 12px;
+        }
+
+        .grid {
+          grid-template-columns: 1fr;
+        }
+
+        .pad {
+          height: 240px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="card">
+        <div class="top">
+          <div>
+            <div class="title">Web Sim Client (Mouse Drag)</div>
+            <div class="sub">Drag in pad to stream frames to hapticnet and grpc backend</div>
+          </div>
+          <div class="spacer"></div>
+          <a class="link-btn" href="/">Back to Dashboard</a>
+        </div>
+
+        <div class="content">
+          <div class="grid">
+            <label class="full"
+              >Target
+              <select id="sim_target">
+                <option value="both" selected>both (hapticnet + grpc)</option>
+                <option value="hapticnet">hapticnet only</option>
+                <option value="grpc">grpc only</option>
+              </select>
+            </label>
+            <label class="full"
+              >Payload Mode
+              <select id="sim_payload_mode">
+                <option value="position">position only</option>
+                <option value="position_force" selected>position + force</option>
+                <option value="full">full (pos + force + texture + rot)</option>
+              </select>
+            </label>
+            <label
+              >Haptic Host
+              <input type="text" id="sim_h_host" value="127.0.0.1" />
+            </label>
+            <label
+              >Haptic Port
+              <input type="number" id="sim_h_port" value="9000" />
+            </label>
+            <label
+              >gRPC Host
+              <input type="text" id="sim_g_host" value="127.0.0.1" />
+            </label>
+            <label
+              >gRPC Port
+              <input type="number" id="sim_g_port" value="50051" />
+            </label>
+            <label
+              >Z Axis
+              <input type="number" id="sim_z" value="0" step="0.05" min="-1" max="1" />
+            </label>
+            <label
+              >Force
+              <input type="number" id="sim_force" value="0.35" step="0.05" min="0" max="1" />
+            </label>
+            <label class="full"
+              >Texture ID (full mode)
+              <input type="number" id="sim_texture" value="1" />
+            </label>
+          </div>
+
+          <div class="pad" id="simPad">
+            <div class="cursor" id="simCursor"></div>
+          </div>
+
+          <div class="meta">
+            <span id="simPosText">x=0.000 y=0.000</span>
+            <span id="simSeqText">sent=0</span>
+          </div>
+          <div class="status" id="simStatus">Drag inside the pad to send frames</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const SIM_SEND_INTERVAL_MS = 33;
+      const simState = {
+        dragging: false,
+        pointerId: null,
+        lastSentAt: 0,
+        sentCount: 0,
+      };
+
+      function clamp(v, lo, hi) {
+        return Math.max(lo, Math.min(hi, v));
+      }
+
+      function updateSimCursor(px, py) {
+        const cursor = document.getElementById("simCursor");
+        cursor.style.left = `${px}px`;
+        cursor.style.top = `${py}px`;
+      }
+
+      function setStatus(text, isError = false) {
+        const el = document.getElementById("simStatus");
+        el.textContent = text;
+        el.classList.toggle("error", isError);
+      }
+
+      function readSimConfig() {
+        return {
+          target: document.getElementById("sim_target").value,
+          payload_mode: document.getElementById("sim_payload_mode").value,
+          haptic_host: document.getElementById("sim_h_host").value,
+          haptic_port: +document.getElementById("sim_h_port").value,
+          grpc_host: document.getElementById("sim_g_host").value,
+          grpc_port: +document.getElementById("sim_g_port").value,
+          pos_z: +document.getElementById("sim_z").value,
+          force: +document.getElementById("sim_force").value,
+          texture_id: +document.getElementById("sim_texture").value,
+        };
+      }
+
+      async function sendSimFrame(posX, posY) {
+        const now = performance.now();
+        if (now - simState.lastSentAt < SIM_SEND_INTERVAL_MS) {
+          return;
+        }
+        simState.lastSentAt = now;
+
+        const cfg = readSimConfig();
+        const body = {
+          ...cfg,
+          pos_x: posX,
+          pos_y: posY,
+        };
+
+        try {
+          const res = await fetch("/api/simulate/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) {
+            throw new Error("request failed");
+          }
+          const data = await res.json();
+          simState.sentCount += (data.sent || []).length;
+          document.getElementById("simSeqText").textContent = `sent=${simState.sentCount}`;
+          setStatus(`sending -> ${cfg.target}`);
+        } catch (err) {
+          setStatus("send failed (check backend host/port)", true);
+        }
+      }
+
+      function initSimPad() {
+        const pad = document.getElementById("simPad");
+
+        function moveToEvent(ev, sendNow) {
+          const rect = pad.getBoundingClientRect();
+          const px = clamp(ev.clientX - rect.left, 0, rect.width);
+          const py = clamp(ev.clientY - rect.top, 0, rect.height);
+          updateSimCursor(px, py);
+
+          const nx = (px / rect.width) * 2 - 1;
+          const ny = -((py / rect.height) * 2 - 1);
+          document.getElementById("simPosText").textContent = `x=${nx.toFixed(3)} y=${ny.toFixed(3)}`;
+          if (sendNow) {
+            sendSimFrame(nx, ny);
+          }
+        }
+
+        pad.addEventListener("pointerdown", (ev) => {
+          simState.dragging = true;
+          simState.pointerId = ev.pointerId;
+          pad.setPointerCapture(ev.pointerId);
+          moveToEvent(ev, true);
+          setStatus("dragging... sending frames");
+        });
+
+        pad.addEventListener("pointermove", (ev) => {
+          if (!simState.dragging || simState.pointerId !== ev.pointerId) {
+            return;
+          }
+          moveToEvent(ev, true);
+        });
+
+        function stopDrag(ev) {
+          if (simState.pointerId !== ev.pointerId) {
+            return;
+          }
+          simState.dragging = false;
+          simState.pointerId = null;
+          setStatus("idle");
+        }
+
+        pad.addEventListener("pointerup", stopDrag);
+        pad.addEventListener("pointercancel", stopDrag);
+      }
+
+      window.addEventListener("load", () => {
+        initSimPad();
+      });
+    </script>
+  </body>
+</html>

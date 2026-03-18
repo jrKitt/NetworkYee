@@ -234,11 +234,12 @@ def run_receiver(
     expected_seq = 1
     initialized_expected_seq = False
     missing_since = 0.0
-    missing_wait_s = 0.03
+    # Keep the missing wait short so DR can kick in close to sender cadence.
+    missing_wait_s = 0.01
     last_rx_at = 0.0
-    dr_max_gap_s = 0.02
+    dr_max_gap_s = 0.08
     last_dr_at = 0.0
-    dr_emit_interval_s = 0.02
+    dr_emit_interval_s = 0.01
     rx_log_every = 10
 
     _stop = stop_event if stop_event is not None else threading.Event()
@@ -264,7 +265,7 @@ def run_receiver(
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.bind((bind_host, port))
-            sock.settimeout(0.02)
+            sock.settimeout(0.005)
             print(f"hapticnet server started on {bind_host}:{port} jitter_buffer={buffer_size}")
 
             while not _stop.is_set():
@@ -277,7 +278,7 @@ def run_receiver(
                     if _loss[0] > 0.0 and random.random() < _loss[0]:
                         continue  # drop for DR testing
 
-                    seq = int.from_bytes(payload[0:4], "big", signed=False)
+                    seq = _read_sequence(payload)
                     last_rx_at = time.perf_counter()
 
                     # end-of-stream marker
@@ -336,8 +337,12 @@ def run_receiver(
                 except ValueError:
                     continue
 
-                in_order_payload = jitter_buffer.pop_expected(expected_seq)
-                if in_order_payload is not None:
+                consumed_any = False
+                while True:
+                    in_order_payload = jitter_buffer.pop_expected(expected_seq)
+                    if in_order_payload is None:
+                        break
+                    consumed_any = True
                     in_order = HapticPacket.from_bytes(in_order_payload)
                     reckoner.update(in_order)
                     stats.rx_packets += 1
@@ -364,6 +369,8 @@ def run_receiver(
                         })
                     expected_seq += 1
                     missing_since = 0.0
+
+                if consumed_any:
                     stats.report(expected_seq)
                     continue
 
@@ -389,10 +396,11 @@ def run_receiver(
                     last_dr_at = now
                     stats.estimated_packets += 1
                     stats.dropped_packets += 1
-                    print(
-                        f"hapticnet dr seq={estimated.sequence:04d} "
-                        f"pos=({estimated.pos_x:+.3f},{estimated.pos_y:+.3f},{estimated.pos_z:+.3f})"
-                    )
+                    if estimated.sequence == 1 or (estimated.sequence % rx_log_every) == 0:
+                        print(
+                            f"hapticnet dr seq={estimated.sequence:04d} "
+                            f"pos=({estimated.pos_x:+.3f},{estimated.pos_y:+.3f},{estimated.pos_z:+.3f})"
+                        )
                     if on_packet is not None:
                         on_packet({
                             "seq": estimated.sequence,

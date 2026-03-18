@@ -5,7 +5,7 @@ from .models import HapticPacket
 from .config import SEQUENCE_OFFSET, TEXTURE_ID_OFFSET
 
 def _read_sequence(payload: bytes) -> int:
-    return int.from_bytes(payload[SEQUENCE_OFFSET:SEQUENCE_OFFSET + 4], byteorder='little')
+    return int.from_bytes(payload[SEQUENCE_OFFSET:SEQUENCE_OFFSET + 4], byteorder='big')
 
 
 class PacketBuffer:

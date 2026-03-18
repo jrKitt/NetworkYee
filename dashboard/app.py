@@ -139,6 +139,12 @@ async def index() -> HTMLResponse:
     return HTMLResponse(content=html)
 
 
+@app.get("/simulate", response_class=HTMLResponse)
+async def simulate_page() -> HTMLResponse:
+    html = (STATIC_DIR / "simulate.html").read_text()
+    return HTMLResponse(content=html)
+
+
 # ---------------------------------------------------------------------------
 # REST – status
 # ---------------------------------------------------------------------------

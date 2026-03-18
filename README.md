@@ -57,7 +57,8 @@ python3 -m grpc client --discover --rate 100 --samples 1000
 python3 -m dashboard
 ```
 
-Open `http://127.0.0.1:8080` and use **Web Sim Client (Mouse Drag)**:
+Open `http://127.0.0.1:8080` for dashboard,
+then open `http://127.0.0.1:8080/simulate` for **Web Sim Client (Mouse Drag)**:
 - drag on the pad to stream position data
 - choose `hapticnet`, `grpc`, or `both`
 - choose payload mode: `position`, `position + force`, `full`
